@@ -17,7 +17,7 @@ Vamos preencher um item por vez. ✅ = já respondido.
 
 ## Telegram
 - [ ] O grupo permite adicionar bot?
-- [ ] Você é administradora do grupo?
+- [x] ✅ Você é administradora do grupo
 - [ ] As alunas serão avisadas de que as mensagens são organizadas pela equipe?
 
 ## Drive
