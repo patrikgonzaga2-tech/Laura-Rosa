@@ -3,23 +3,24 @@
 > Este material ajuda a identificar cuidados. **Não substitui orientação jurídica.** Recomendamos revisar com um profissional, principalmente o termo de autorização de imagem.
 
 ## Que dados aparecem
-- **Identificação e contato:** nome e telefone. Ficam em uma área restrita, só para quem precisa responder a aluna.
-- **Conteúdo das mensagens:** rotina, alimentação, motivação.
+- **O painel não guarda telefone nem contato.** Ele organiza e não serve para responder, então esses dados não são necessários. Isso é minimização de dados, um princípio da LGPD.
+- **Identificação mínima:** um código (ex.: A-012) e, para quem tem permissão de edição, o primeiro nome. O sobrenome fica só em memória, para ser escondido dos textos.
+- **Conteúdo das mensagens:** rotina, alimentação, motivação, objeções.
 - **Possíveis dados sensíveis (dados de saúde):** peso, medidas, fotos do corpo, relatos de saúde. A LGPD exige cuidado redobrado com esse tipo de dado. Para usar em divulgação, o caminho mais seguro é o **consentimento específico e destacado**, além da autorização de uso de imagem.
 
 ## Separação adotada no painel
 | Área | O que mostra | Quem vê |
 |---|---|---|
-| Fila de acompanhamento | Primeiro nome + código. Contato só ao clicar em "Ver contato", e o acesso é registrado | Suporte, Administração |
-| Painéis, busca e conteúdos | Código da aluna e texto sem telefone, e-mail, @ e sobrenome | Todas as funções |
+| Painéis, dores, objeções, ideias | Código da aluna (e primeiro nome para quem edita) e texto sem telefone, e-mail, @ e sobrenome | Todas as funções |
+| "Alunas que pedem um olhar" e "Convidar para antes e depois" | Sinais automáticos por aluna. Uso interno | Todas as funções (primeiro nome só para quem edita) |
 | Relatórios exportados | Sem nome, sem código, sem contato | Exportação, Administração |
 | Material de divulgação | Só itens com autorização "para divulgação" + quem confirmou + revisão humana | Exportação, Administração |
-| Fotos originais | Acesso restrito. Nunca alteradas | Suporte, Administração |
+| Fotos originais | Acesso restrito. Nunca alteradas | Edição, Administração |
 | Cópias tratadas | Rosto ou detalhes desfocados. Prévia antes de salvar | Conforme autorização |
 
 ## Decisões que precisam ser suas
 1. **Base legal de cada uso:**
-   - Atendimento: execução do contrato do programa.
+   - Análise para melhorar o programa: legítimo interesse ou execução do contrato (avaliar com o jurídico).
    - Divulgação: consentimento específico.
 2. **Prazo de guarda.** Sugestão para discutir:
    - mensagens identificadas por 12 meses após o fim do programa, depois anonimizadas;

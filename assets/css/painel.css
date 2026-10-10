@@ -337,8 +337,15 @@ blockquote.depo { margin: 0; padding-left: 12px; border-left: 2px solid var(--ac
 .sinais { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .sinais li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .sinal-tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 4px; }
-.sinal-bloqueio .sinal-tag { background: var(--crit-soft); color: var(--crit); }
+.sinal-dificuldade .sinal-tag { background: var(--crit-soft); color: var(--crit); }
 .sinal-sumiu .sinal-tag { background: var(--warn-soft); color: var(--warn-ink); }
+.sinal-convite .sinal-tag { background: var(--accent-soft); color: var(--accent-ink); }
+.objecao { padding: 6px 0 6px 12px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.objecao-nome { font-weight: 700; }
+.quebra { background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.quebra-rot { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--accent-ink); }
+.chip-obj { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.sug .chip { align-self: flex-start; }
 
 /* Importar */
 .passos { margin: 6px 0 4px; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 4px; }

@@ -8,7 +8,9 @@ Navegador (index.html)
  ├─ Importação manual: .txt do WhatsApp, .json do Telegram, .csv
  │    └─ lidos só na memória da aba, nunca gravados nem enviados
  ├─ Classificação automática por palavras-chave → sempre "sugestão", revisada por pessoa
- ├─ Minimização: textos sem telefone, e-mail, @, CPF e sobrenomes conhecidos
+ ├─ Análises: objeções, tipos de resultado, perguntas repetidas, interação no grupo,
+ │    sinais por aluna e sugestões de como ajudar mais → pauta de conteúdo
+ ├─ Minimização: sem telefone ou contato; textos sem e-mail, @, CPF e sobrenomes
  └─ Permissões simuladas (Leitura, Suporte, Exportação, Administração)
 ```
 
@@ -27,7 +29,7 @@ Navegador (index.html)
                  │ Supabase (região São Paulo)                 │
                  │  • Auth: login por e-mail + 2 etapas        │
                  │  • Postgres com regras por função (RLS)     │
-                 │      alunas (restrito: nome, telefone)      │
+                 │      alunas (código + primeiro nome)        │
                  │      mensagens (código da aluna, texto)     │
                  │      autorizacoes, midias, auditoria        │
                  │  • Storage privado: originais / tratadas    │
@@ -42,16 +44,15 @@ Navegador (index.html)
 
 ### Por que essa combinação
 - **Supabase** reúne banco, login, arquivos privados e funções de servidor num lugar só. Tem região no Brasil e plano gratuito para testes.
-- **As regras de acesso ficam no banco de dados (RLS)**, não só na tela. Quem tem função "Leitura" não recebe nome nem telefone, mesmo que tente acessar por fora do painel.
+- **As regras de acesso ficam no banco de dados (RLS)**, não só na tela. Quem tem função "Leitura" não recebe nem o primeiro nome, mesmo que tente acessar por fora do painel.
+- **O painel não responde alunas**, então não guarda telefone ou contato. Menos dado guardado = menos risco.
 - **Chaves de API** (Telegram, WhatsApp, Google) ficam nos *secrets* das funções de servidor. Nunca ficam no HTML nem no GitHub.
 
 ### Proteção dos dados
 - **Em trânsito:** HTTPS (TLS) em todas as conexões.
 - **Em repouso:** banco e arquivos com criptografia do provedor (AES-256). Fotos em *bucket* privado, acessadas por links temporários e assinados.
-- **Separação:**
-  - A tabela de identificação (nome e contato) é restrita às funções Suporte e Administração.
-  - Painéis e relatórios usam código e texto mascarado.
-- **Auditoria:** uma tabela registra mudança de status, edição de classificação, autorização, exportação e visualização de contato.
+- **Separação:** painéis usam código (e primeiro nome só para quem edita). Relatórios não têm identificação.
+- **Auditoria:** uma tabela registra edição de classificação, autorização, cópias tratadas, importação e exportação.
 - **Prazo de guarda (a definir com você):** sugestão inicial no `docs/PRIVACIDADE-LGPD.md`.
 - **Correção e exclusão:** a função Administração pode corrigir ou apagar os dados de uma aluna. Cópias derivadas e relatórios gerados também são localizados pelo código dela.
 

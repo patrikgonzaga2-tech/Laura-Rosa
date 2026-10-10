@@ -15,7 +15,7 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 - **Planilha:** use o modelo `.csv` disponível na tela Importar.
 - **Limitação:** é manual e não atualiza sozinho. Em compensação, não exige nenhuma configuração externa.
 
-## Etapa A: Telegram (provavelmente a mais simples)
+## Etapa A: Telegram (a principal fonte e a mais simples de automatizar)
 **Como funciona:** um bot oficial criado no @BotFather entra no grupo. O Telegram envia cada nova mensagem para uma função no servidor (webhook), que grava no banco.
 
 **Requisitos:**
@@ -35,19 +35,18 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 3. Conferir no painel, apagar os dados de teste e só então levar o bot para o grupo real, com aviso às alunas.
 
 ## Etapa B: WhatsApp
-**As opções dependem da sua resposta sobre qual solução você usa hoje:**
+**Decisão atual:** o painel só **lê e organiza**, não responde. Por isso a **exportação manual** é o caminho recomendado para começar. É oficial, gratuita e não arrisca o número.
 
 | Cenário | É oficial? | O que dá para fazer |
 |---|---|---|
-| App WhatsApp Business no celular | Sim | **Não há API para ler conversas.** Só a exportação manual (.txt) |
-| WhatsApp Business Platform (Cloud API da Meta), direto | Sim | Mensagens novas chegam por webhook. Exige empresa verificada no Gerenciador de Negócios e um número conectado à API |
-| Provedor autorizado pela Meta (BSP) | Sim, se for parceiro oficial | Igual à Cloud API, com o painel do provedor. Alguns oferecem **coexistência**: o mesmo número continua no app Business e na API, às vezes com importação de parte do histórico. Confirmar com o provedor |
-| Ferramentas que conectam pelo QR code do WhatsApp Web | **Não** | **Não recomendado.** Pode bloquear o número e expõe as conversas |
+| App do WhatsApp no celular (uso atual) | Sim | Não há API para ler conversas. Exporte as conversas que trouxeram dúvidas, relatos ou depoimentos ("Exportar conversa → Sem mídia") e importe no painel, por exemplo uma vez por semana |
+| WhatsApp Business Platform (Cloud API), direto ou por provedor oficial | Sim | Coleta automática das mensagens novas. Só vale a pena se o volume tornar a exportação manual pesada demais. Exige o app **WhatsApp Business**, empresa verificada na Meta e, para manter o app no celular junto, um provedor com "coexistência" |
+| Ferramentas que conectam pelo QR code do WhatsApp Web | **Não** | **Não usar.** Podem bloquear o número e expõem as conversas |
 
-**Pontos de atenção:**
-- **Custos:** a Meta cobra por mensagem-modelo enviada fora da janela de atendimento. Receber mensagens e responder dentro da janela de 24 h normalmente não é cobrado. Provedores podem cobrar mensalidade. Vamos confirmar na tabela atual antes de contratar.
-- **Testes:** a Meta oferece um número de teste gratuito. Primeiro conectamos esse número, testamos com celulares da equipe e só depois o número real.
-- **UMCLIQUE:** sua conta tem um conector dessa plataforma. Antes de usá-la como fonte, precisamos confirmar com você que ela é o seu atendimento oficial e se é parceira oficial da Meta. **Não acessei nada dela.**
+**Limitações da exportação:**
+- É feita conversa por conversa.
+- Áudios não viram texto.
+- Fotos de antes e depois entram pela aba "Antes e depois e resultados", só com autorização.
 
 ## Etapa C: Google Drive
 - **Como funciona:** usa a API oficial do Google Drive com login OAuth. A permissão pedida é restrita (`drive.file`), então o painel só enxerga os arquivos e pastas que ele mesmo criou.

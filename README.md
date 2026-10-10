@@ -1,6 +1,6 @@
 # Painel de Acompanhamento das Alunas
 
-Protótipo de painel para organizar o suporte das alunas (WhatsApp de suporte e grupo de acompanhamento no Telegram): dúvidas frequentes, queixas e dificuldades, fila de respostas, depoimentos, relatos de evolução e fotos de antes e depois com controle de autorização.
+Painel que junta e organiza o que as alunas trazem no WhatsApp de suporte e no grupo do Telegram: dores, objeções, dúvidas que se repetem, relatos de evolução, depoimentos, antes e depois e a interação no grupo. A partir disso, gera ideias de conteúdo, ideias de antes e depois e sugestões de como ajudar mais. Ele não serve para responder alunas e não guarda telefone ou contato.
 
 O relatório principal é a **Pauta de conteúdo e necessidades das alunas**. Ela transforma as mensagens em pauta para o Instagram (com o ângulo do seu método), perguntas que se repetem, bloqueios de mentalidade, provas sociais autorizadas e melhorias na entrega. Veja um exemplo com dados fictícios em `exemplos/relatorio-pauta-ficticio.html`.
 
@@ -23,7 +23,7 @@ Não precisa instalar nada. As fontes vêm do Google Fonts quando há internet. 
 |---|---|
 | `index.html` | Página do painel |
 | `assets/css/painel.css` | Visual (claro e escuro, computador e celular) |
-| `assets/js/` | Lógica: classificação, privacidade, importação, gráfico e telas |
+| `assets/js/` | Lógica: classificação, análises (`analise.js`), pauta (`pauta.js`), privacidade, importação, gráfico e telas |
 | `assets/js/dados-demo.js` | **Dados fictícios** usados na demonstração |
 | `exemplos/` | Arquivos fictícios para testar a importação |
 | `docs/ARQUITETURA.md` | Arquitetura proposta (protótipo e versão com servidor) |

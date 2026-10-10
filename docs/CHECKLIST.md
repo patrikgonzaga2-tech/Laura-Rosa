@@ -5,14 +5,15 @@ Vamos preencher um item por vez. ✅ = já respondido.
 ## Conteúdo e operação
 - [x] ✅ Tema da comunidade e assuntos frequentes (viraram as categorias iniciais, editáveis em Configurações)
 - [ ] Revisar a lista de assuntos e as palavras-chave do protótipo
-- [ ] Nomes e funções da equipe (quem vê contato, quem edita, quem exporta, quem administra)
+- [x] ✅ Objetivo do painel: organizar e gerar ideias, não responder (então não guardamos contato)
+- [ ] Revisar as objeções e o "como quebrar" de cada uma (Configurações)
+- [ ] Nomes e funções da equipe (quem edita, quem exporta, quem administra)
 - [ ] Quem pode confirmar autorizações de imagem e depoimento
-- [ ] Prazo esperado de resposta (para destacar "atrasados"; hoje o protótipo usa 24 h)
 
 ## WhatsApp
-- [ ] Qual solução você usa hoje: app WhatsApp Business no celular, API oficial ou provedor (por exemplo, a plataforma UMCLIQUE que aparece conectada à sua conta)
-- [ ] Se o número pode ser conectado à API oficial ou a um provedor autorizado
-- [ ] Quem tem acesso de administrador ao Gerenciador de Negócios da Meta (Meta Business Suite)
+- [x] ✅ Atendimento pelo app do WhatsApp no celular → começar com exportação manual
+- [ ] Mais ou menos quantas conversas por semana (decide se vale automatizar no futuro)
+- [ ] As alunas mandam muito áudio? (áudios não entram na análise)
 
 ## Telegram
 - [ ] O grupo permite adicionar bot?

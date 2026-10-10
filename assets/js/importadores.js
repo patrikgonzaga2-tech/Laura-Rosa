@@ -116,7 +116,8 @@ window.Painel = window.Painel || {};
     return -1;
   }
 
-  // Planilha com colunas: data, canal, nome, mensagem (e opcionais: equipe, telefone).
+  // Planilha com colunas: data, canal, nome, mensagem (e opcional: equipe).
+  // Colunas de telefone ou contato são ignoradas: o painel não precisa delas.
   function csv(texto, canalPadrao) {
     var linhas = lerCSV(texto);
     if (linhas.length < 2) throw new Error('A planilha está vazia ou só tem o cabeçalho.');
@@ -127,7 +128,6 @@ window.Painel = window.Painel || {};
     var iTexto = acharColuna(cab, ['mensagem', 'texto', 'conteudo']);
     var iCanal = acharColuna(cab, ['canal']);
     var iEquipe = acharColuna(cab, ['equipe', 'da equipe', 'e da equipe']);
-    var iTel = acharColuna(cab, ['telefone', 'celular', 'contato']);
     var faltam = [];
     if (iData < 0) faltam.push('data');
     if (iNome < 0) faltam.push('nome');
@@ -147,8 +147,7 @@ window.Painel = window.Painel || {};
         remetente: String(l[iNome] || 'Sem nome').trim(),
         texto: t,
         canal: canal,
-        equipe: iEquipe >= 0 ? /^(s|sim|x|1|true)$/i.test(String(l[iEquipe]).trim()) : undefined,
-        telefone: iTel >= 0 ? String(l[iTel] || '').trim() : ''
+        equipe: iEquipe >= 0 ? /^(s|sim|x|1|true)$/i.test(String(l[iEquipe]).trim()) : undefined
       });
     });
     if (!msgs.length) throw new Error('Nenhuma linha válida. Confira se a data está como dd/mm/aaaa e se a mensagem não está vazia.');

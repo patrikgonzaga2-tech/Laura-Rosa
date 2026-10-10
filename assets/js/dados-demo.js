@@ -131,6 +131,17 @@ window.Painel = window.Painel || {};
     return ks[ks.length - 1];
   }
 
+  // Mensagens fictícias "da equipe" no grupo e o quanto cada formato puxa conversa.
+  var POSTS = [
+    { tema: 'tempo', eng: 7, x: 'Desafio da semana: 3 treinos curtos de 15 minutos. Quem topa? Responde aqui' },
+    { tema: 'constancia', eng: 6, x: 'Qual foi a sua maior dificuldade essa semana? Me conta aqui que eu te ajudo' },
+    { tema: 'constancia', eng: 4, x: 'Lembrete: o treino de hoje não precisa ser perfeito, precisa ser feito.' },
+    { tema: 'objetivo', eng: 3, x: 'Dica: se o tempo estiver curto, faça só o primeiro bloco do treino do dia. Ele já cumpre o objetivo principal.' },
+    { tema: 'cafe', eng: 3, x: 'Ideia de café da manhã rápido para os dias corridos: ovos mexidos com fruta.' },
+    { tema: 'acesso', eng: 1.5, x: 'Os treinos novos da semana já estão liberados na plataforma.' }
+  ];
+  var RESPOSTAS_CURTAS = ['Eu topo!', 'Tô dentro, bora!', 'Vou tentar essa semana', 'Conta comigo', 'Precisava ler isso hoje'];
+
   function gerar(temas, equipe) {
     var C = P.classificador;
     var r = mulberry32(20261010);
@@ -140,70 +151,54 @@ window.Painel = window.Painel || {};
     var alunas = {};
     NOMES.forEach(function (nome, i) {
       var id = 'A-' + String(i + 1).padStart(3, '0');
-      alunas[id] = {
-        id: id,
-        nome: nome,
-        sobrenome: escolher(r, SOBRENOMES),
-        telefone: '+55 (00) 90000-' + String(1000 + i),
-        ficticia: true
-      };
+      alunas[id] = { id: id, nome: nome, sobrenome: escolher(r, SOBRENOMES), ficticia: true };
     });
     var ids = Object.keys(alunas);
 
     var mensagens = [];
     var seq = 0;
+
+    function criar(texto, temaVerdadeiro, tipoVerdadeiro, canal, data, d) {
+      var auto = C.classificar(texto, temas);
+      var revisado = d >= 6 && r() < 0.75;
+      var tipo = revisado ? tipoVerdadeiro : auto.tipo;
+      var m = {
+        id: 'd' + (++seq), origem: 'demo', canal: canal, alunaId: escolher(r, ids), data: data, texto: texto, equipe: false,
+        tipo: tipo, tema: revisado ? temaVerdadeiro : auto.tema, auto: auto, revisado: revisado, aut: null
+      };
+      if (tipo === 'depoimento' || tipo === 'evolucao') {
+        var y = r();
+        var st = y < 0.4 ? 'nao_solicitada' : y < 0.6 ? 'solicitada' : y < 0.75 ? 'uso_interno' : y < 0.95 ? 'divulgacao' : 'negada';
+        m.aut = { status: st, confirmadoPor: (st === 'uso_interno' || st === 'divulgacao') ? equipe[0] : '', data: (st === 'nao_solicitada' ? null : data + 86400000) };
+      }
+      mensagens.push(m);
+    }
+
     for (var d = 59; d >= 0; d--) {
       var dia = U.somarDias(hoje, -d);
       var ds = new Date(dia).getDay();
+
+      // Mensagem do dia da equipe no grupo do Telegram e as respostas que ela puxa.
+      var post = POSTS[Math.floor(r() * POSTS.length)];
+      var hPost = dia + (7 + Math.floor(r() * 2)) * 3600000 + Math.floor(r() * 50) * 60000;
+      if (hPost < agora) {
+        mensagens.push({ id: 'd' + (++seq), origem: 'demo', canal: 'telegram', alunaId: null, autor: 'Equipe (fictício)', data: hPost, texto: post.x, equipe: true, tipo: 'outro', tema: post.tema, revisado: true, aut: null });
+        var nResp = Math.round(post.eng * (0.6 + r() * 0.8));
+        for (var q = 0; q < nResp; q++) {
+          var dr = hPost + (5 + Math.floor(r() * 160)) * 60000;
+          if (dr > agora) continue;
+          if (r() < 0.45) criar(escolher(r, RESPOSTAS_CURTAS), 'outros', 'outro', 'telegram', dr, d);
+          else { var mt = escolher(r, MODELOS[post.tema]); criar(mt.x, post.tema, mt.t, 'telegram', dr, d); }
+        }
+      }
+
       var n = 7 + (ds === 1 ? 4 : 0) - (ds === 0 ? 3 : 0) - (ds === 6 ? 2 : 0) + Math.floor(r() * 5);
       for (var k = 0; k < n; k++) {
         var temaVerdadeiro = escolherTema(r, d, ds);
         var modelo = escolher(r, MODELOS[temaVerdadeiro]);
-        var data = dia + (6 + Math.floor(r() * 16)) * 3600000 + Math.floor(r() * 60) * 60000;
+        var data = dia + (10 + Math.floor(r() * 12)) * 3600000 + Math.floor(r() * 60) * 60000;
         if (data > agora) data = agora - Math.floor(r() * 3 * 3600000);
-        var auto = C.classificar(modelo.x, temas);
-        var revisado = d >= 6 && r() < 0.75;
-        var tipo = revisado ? modelo.t : auto.tipo;
-        var tema = revisado ? temaVerdadeiro : auto.tema;
-
-        var m = {
-          id: 'd' + (++seq),
-          origem: 'demo',
-          canal: r() < P_WHATS[temaVerdadeiro] ? 'whatsapp' : 'telegram',
-          alunaId: escolher(r, ids),
-          data: data,
-          texto: modelo.x,
-          equipe: false,
-          tipo: tipo,
-          tema: tema,
-          auto: auto,
-          revisado: revisado,
-          acomp: null,
-          aut: null
-        };
-
-        if (C.precisaAcompanhar(tipo)) {
-          var x = r();
-          var status;
-          if (d > 4) status = x < 0.92 ? 'concluido' : 'andamento';
-          else if (d >= 1) status = x < 0.5 ? 'concluido' : x < 0.75 ? 'andamento' : 'pendente';
-          else status = x < 0.7 ? 'pendente' : 'andamento';
-          var prio = C.sugerirPrioridade(tipo, tema, modelo.x);
-          if (prio === 'media' && r() < 0.3) prio = 'baixa';
-          m.acomp = {
-            status: status,
-            prioridade: prio,
-            responsavel: status === 'pendente' && r() < 0.6 ? '' : escolher(r, equipe),
-            sugerido: true
-          };
-        }
-
-        if (tipo === 'depoimento' || tipo === 'evolucao') {
-          var y = r();
-          var st = y < 0.4 ? 'nao_solicitada' : y < 0.6 ? 'solicitada' : y < 0.75 ? 'uso_interno' : y < 0.95 ? 'divulgacao' : 'negada';
-          m.aut = { status: st, confirmadoPor: (st === 'uso_interno' || st === 'divulgacao') ? equipe[0] : '', data: (st === 'nao_solicitada' ? null : data + 86400000) };
-        }
-        mensagens.push(m);
+        criar(modelo.x, temaVerdadeiro, modelo.t, r() < P_WHATS[temaVerdadeiro] ? 'whatsapp' : 'telegram', data, d);
       }
     }
     mensagens.sort(function (a, b) { return a.data - b.data; });

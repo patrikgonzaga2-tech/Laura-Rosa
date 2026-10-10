@@ -1,24 +1,25 @@
 /*
  * Painel de acompanhamento das alunas: protótipo navegável.
+ * Objetivo: juntar e organizar o que as alunas trazem (dores, objeções, resultados,
+ * antes e depois, interação no grupo) e transformar em ideias de conteúdo e de cuidado.
+ * O painel não responde ninguém e não guarda telefone ou contato.
  * Estado só em memória: ao recarregar a página tudo volta ao início.
  * Permissões aqui são SIMULADAS (não há login). A versão real valida no servidor.
  */
 (function (P) {
   'use strict';
 
-  var U = P.util, C = P.classificador, PRIV = P.privacidade;
+  var U = P.util, C = P.classificador, A = P.analise, PRIV = P.privacidade;
   var esc = U.esc;
 
   var PAPEIS = {
-    leitura: { nome: 'Leitura', editar: false, contato: false, exportar: false, admin: false },
-    edicao: { nome: 'Suporte (edição)', editar: true, contato: true, exportar: false, admin: false },
-    exportacao: { nome: 'Exportação', editar: false, contato: false, exportar: true, admin: false },
-    admin: { nome: 'Administração', editar: true, contato: true, exportar: true, admin: true }
+    leitura: { nome: 'Leitura', editar: false, nome1: false, exportar: false, admin: false },
+    edicao: { nome: 'Edição', editar: true, nome1: true, exportar: false, admin: false },
+    exportacao: { nome: 'Exportação', editar: false, nome1: false, exportar: true, admin: false },
+    admin: { nome: 'Administração', editar: true, nome1: true, exportar: true, admin: true }
   };
 
   var CANAIS = { whatsapp: 'WhatsApp', telegram: 'Telegram' };
-  var STATUS = { pendente: 'Pendente', andamento: 'Em andamento', concluido: 'Concluído' };
-  var PRIORIDADES = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
   var AUT = {
     nao_solicitada: 'Não solicitada',
     solicitada: 'Solicitada, aguardando',
@@ -26,48 +27,45 @@
     divulgacao: 'Autorizada para divulgação',
     negada: 'Recusada'
   };
+  var NATUREZAS = { conteudo: 'Vira conteúdo', mentalidade: 'Bloqueio de mentalidade', entrega: 'Ajuste na entrega', prova: 'Prova social' };
   var ABAS = [
     { id: 'visao', nome: 'Visão geral' },
     { id: 'resumo', nome: 'Resumo do dia' },
-    { id: 'fila', nome: 'Fila de acompanhamento' },
+    { id: 'dores', nome: 'Dores e objeções' },
+    { id: 'resultados', nome: 'Antes e depois e resultados' },
+    { id: 'ideias', nome: 'Ideias de conteúdo' },
+    { id: 'ajuda', nome: 'Como ajudar mais' },
     { id: 'mensagens', nome: 'Mensagens e revisão' },
-    { id: 'conteudos', nome: 'Conteúdos' },
-    { id: 'fotos', nome: 'Antes e depois' },
     { id: 'relatorios', nome: 'Relatórios' },
     { id: 'importar', nome: 'Importar' },
     { id: 'config', nome: 'Configurações' }
-  ];
-  var SUBCONTEUDOS = [
-    { id: 'queixa', nome: 'Queixas' },
-    { id: 'dificuldade', nome: 'Dificuldades' },
-    { id: 'depoimento', nome: 'Depoimentos positivos' },
-    { id: 'evolucao', nome: 'Relatos de evolução' },
-    { id: 'ideias', nome: 'Pauta de conteúdo' }
   ];
 
   var S = {
     modo: 'demo',
     papel: 'admin',
     aba: 'visao',
-    sub: 'queixa',
+    subDores: 'objecoes',
+    subRes: 'ideias',
     temas: C.temasPadrao(),
-    equipe: ['Coordenação', 'Suporte 1', 'Suporte 2'],
+    objecoes: A.objecoesPadrao(),
+    resultados: A.resultadosPadrao(),
+    equipe: ['Coordenação', 'Equipe 1', 'Equipe 2'],
     dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [] } },
-    filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '', status: '' },
+    filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
     soNaoRevisadas: false,
     limite: 40,
     gran: 'dia',
     diaResumo: '',
-    fila: { status: 'abertos', prioridade: '', responsavel: '' },
-    contatos: {},
-    rel: { tipo: 'pauta', soRevisadas: true, secoes: { numeros: true, temas: true, queixas: true, depoimentos: true, pendencias: true } },
+    rel: { tipo: 'pauta', soRevisadas: true, secoes: { numeros: true, temas: true, dores: true, depoimentos: true } },
     impOrigem: 'whatsapp',
     impCanal: 'whatsapp',
     impPrevia: null,
     seqImport: 0,
     auditoria: [],
-    editor: null
+    editor: null,
+    confirmarLimpeza: false
   };
 
   /* ---------- acesso aos dados ---------- */
@@ -78,6 +76,8 @@
   function msgsAlunas() { return conj().mensagens.filter(function (m) { return !m.equipe; }); }
   function nomeTema(id) { var t = S.temas.find(function (x) { return x.id === id; }); return t ? t.nome : 'Outros assuntos'; }
   function nomeTipo(id) { var t = C.TIPOS.find(function (x) { return x.id === id; }); return t ? t.nome : id; }
+  function ehDor(m) { return m.tipo === 'duvida' || m.tipo === 'dificuldade' || m.tipo === 'queixa'; }
+  function ehProva(m) { return m.tipo === 'depoimento' || m.tipo === 'evolucao'; }
 
   function registrar(acao, detalhe) {
     S.auditoria.unshift({ quando: Date.now(), papel: PAPEIS[S.papel].nome, modo: S.modo === 'demo' ? 'Exemplo' : 'Importados', acao: acao, detalhe: detalhe || '' });
@@ -111,23 +111,19 @@
     return [iv[0] - dur, iv[0] - 1];
   }
 
-  function passaFiltros(m, opts) {
+  function passaFiltros(m) {
     var f = S.filtros;
-    opts = opts || {};
     if (f.canal && m.canal !== f.canal) return false;
     if (f.tema && m.tema !== f.tema) return false;
     if (f.tipo && m.tipo !== f.tipo) return false;
     if (f.autorizacao && (!m.aut || m.aut.status !== f.autorizacao)) return false;
-    if (!opts.ignorarStatus && f.status) {
-      if (f.status === 'sem' ? !!m.acomp : (!m.acomp || m.acomp.status !== f.status)) return false;
-    }
     return true;
   }
 
-  function filtrar(lista, iv, opts) {
+  function filtrar(lista, iv) {
     return lista.filter(function (m) {
       if (iv && (m.data < iv[0] || m.data > iv[1])) return false;
-      return passaFiltros(m, opts);
+      return passaFiltros(m);
     });
   }
 
@@ -137,12 +133,28 @@
   }
   function invalidarMascaras() { conj().mensagens.forEach(function (m) { m._seguro = null; }); }
 
-  // Identificação de acordo com a permissão.
+  // Identificação de acordo com a permissão (o painel não guarda contato).
   function rotuloAluna(id) {
     var a = alunasAtuais()[id];
     if (!a) return 'Sem identificação';
-    if (pode('contato')) return PRIV.primeiroNome(a) + ' · ' + id;
+    if (pode('nome1')) return PRIV.primeiroNome(a) + ' · ' + id;
     return 'Aluna ' + id;
+  }
+
+  function prontoDivulgacao(m) { return m.revisado && m.aut && m.aut.status === 'divulgacao' && !!m.aut.confirmadoPor; }
+
+  // Análise completa do período (pauta, objeções, resultados, interação, sugestões).
+  function analisar(lista, anterior, iv) {
+    return P.pauta.construir({
+      lista: lista, anterior: anterior, todas: conj().mensagens, iv: iv,
+      temas: S.temas, objecoes: S.objecoes, resultados: S.resultados,
+      textoSeguro: textoSeguro, nomeTema: nomeTema, pronto: prontoDivulgacao,
+      sinais: A.sinaisAlunas(msgsAlunas(), S.temas, iv[1])
+    });
+  }
+  function analisePeriodo() {
+    var iv = intervalo();
+    return { iv: iv, lista: filtrar(msgsAlunas(), iv), r: analisar(filtrar(msgsAlunas(), iv), filtrar(msgsAlunas(), intervaloAnterior(iv)), iv) };
   }
 
   /* ---------- pequenos componentes ---------- */
@@ -159,6 +171,7 @@
   function mapaEquipe() { var r = {}; S.equipe.forEach(function (n) { r[n] = n; }); return r; }
 
   function canalTag(c) { return '<span class="canal canal-' + c + '"><i aria-hidden="true"></i>' + CANAIS[c] + '</span>'; }
+  function citar(t) { return '“' + esc(t) + '”'; }
 
   function classeChip(m) {
     if (m.revisado) return '<span class="chip chip-ok" title="Classificação conferida por uma pessoa">Revisada</span>';
@@ -174,14 +187,18 @@
       (aut.confirmadoPor ? ' · confirmado por ' + esc(aut.confirmadoPor) : '') + '</span>';
   }
 
-  function prioPill(p) { return '<span class="prio prio-' + p + '">' + PRIORIDADES[p] + '</span>'; }
-
   function vazio(titulo, texto, botao) {
     return '<div class="vazio"><h3>' + esc(titulo) + '</h3><p>' + texto + '</p>' + (botao || '') + '</div>';
   }
 
   function semPermissao(acao) {
     return '<p class="nota nota-trava"><span aria-hidden="true">🔒</span> Seu papel atual (' + esc(PAPEIS[S.papel].nome) + ') não permite ' + acao + '. Troque em "Ver como" para testar outro acesso.</p>';
+  }
+
+  function subnav(chave, itens) {
+    return '<div class="subnav" role="tablist">' + itens.map(function (s) {
+      return '<button type="button" role="tab" data-acao="sub" data-k="' + chave + '" data-v="' + s[0] + '" aria-selected="' + (S[chave] === s[0]) + '">' + esc(s[1]) + (s[2] != null ? ' <span class="sub">' + s[2] + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
   }
 
   function avisar(msg) {
@@ -210,21 +227,18 @@
     }
     faixa.innerHTML += ' <span class="faixa-sim">Login e permissões são simulados neste protótipo.</span>';
 
-    var nav = document.getElementById('nav');
-    var pend = msgsAlunas().filter(function (m) { return m.acomp && m.acomp.status === 'pendente'; }).length;
-    nav.innerHTML = ABAS.map(function (a) {
-      var extra = a.id === 'fila' && pend ? '<span class="nav-cont" aria-label="' + pend + ' pendentes">' + pend + '</span>' : '';
-      return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + extra + '</button>';
+    document.getElementById('nav').innerHTML = ABAS.map(function (a) {
+      return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + '</button>';
     }).join('');
   }
 
-  function filtrosVisiveis() { return ['visao', 'fila', 'mensagens', 'conteudos', 'relatorios'].indexOf(S.aba) !== -1; }
+  function filtrosVisiveis() { return ['visao', 'dores', 'resultados', 'ideias', 'ajuda', 'mensagens', 'relatorios'].indexOf(S.aba) !== -1; }
 
   function renderFiltros() {
     var el = document.getElementById('filtros');
     if (!filtrosVisiveis() || !conj().mensagens.length) { el.innerHTML = ''; return; }
     var f = S.filtros;
-    var ativos = ['canal', 'tema', 'tipo', 'autorizacao', 'status'].filter(function (k) { return f[k]; }).length;
+    var ativos = ['canal', 'tema', 'tipo', 'autorizacao'].filter(function (k) { return f[k]; }).length;
     var iv = intervalo();
     var aberto = el.querySelector('details') ? el.querySelector('details').open : window.innerWidth >= 900;
     el.innerHTML =
@@ -240,7 +254,6 @@
       campoSelect('f-tema', 'Assunto', 'tema', mapaTemas(), f.tema, 'Todos') +
       campoSelect('f-tipo', 'Tipo de conteúdo', 'tipo', mapaTipos(), f.tipo, 'Todos') +
       campoSelect('f-aut', 'Autorização', 'autorizacao', AUT, f.autorizacao, 'Qualquer') +
-      campoSelect('f-status', 'Acompanhamento', 'status', { pendente: 'Pendente', andamento: 'Em andamento', concluido: 'Concluído', sem: 'Não precisa' }, f.status, 'Qualquer') +
       '<div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="limpar-filtros">Limpar filtros</button></div>' +
       '</div></details>';
   }
@@ -253,14 +266,14 @@
     renderMoldura();
     renderFiltros();
     var el = document.getElementById('aba');
-    var semDados = !conj().mensagens.length && ['importar', 'config'].indexOf(S.aba) === -1 && !(S.aba === 'fotos' && S.modo === 'import');
+    var semDados = !conj().mensagens.length && ['importar', 'config'].indexOf(S.aba) === -1 && !(S.aba === 'resultados' && S.subRes === 'fotos' && S.modo === 'import');
     if (semDados) {
       el.innerHTML = vazio('Nenhum dado importado ainda',
         'Para ver seus dados aqui, importe um arquivo exportado do WhatsApp, do Telegram ou uma planilha. Os dados ficam só nesta aba e não se misturam com o exemplo fictício.',
         '<button type="button" class="btn" data-acao="aba" data-v="importar">Ir para Importar</button>');
       return;
     }
-    var fn = { visao: abaVisao, resumo: abaResumo, fila: abaFila, mensagens: abaMensagens, conteudos: abaConteudos, fotos: abaFotos, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig }[S.aba];
+    var fn = { visao: abaVisao, resumo: abaResumo, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig }[S.aba];
     el.innerHTML = fn();
     if (S.aba === 'visao') desenharGrafico();
     if (S.aba === 'mensagens') renderListaMensagens();
@@ -271,18 +284,18 @@
   function abaVisao() {
     var iv = intervalo(), ant = intervaloAnterior(iv);
     var atual = filtrar(msgsAlunas(), iv), anterior = filtrar(msgsAlunas(), ant);
+    var r = analisar(atual, anterior, iv);
     var porTipoA = U.contarPor(atual, 'tipo'), porTipoB = U.contarPor(anterior, 'tipo');
-    var abertos = filtrar(msgsAlunas(), null, { ignorarStatus: true }).filter(function (m) { return m.acomp && m.acomp.status !== 'concluido'; });
+    var comObj = function (l) { return l.filter(function (m) { return !ehProva(m) && A.detectar(m.texto, S.objecoes).length; }).length; };
     var naoRev = atual.filter(function (m) { return !m.revisado; }).length;
 
-    function kpi(rot, a, b, nota) {
-      var v = b == null ? null : U.variacao(a, b);
+    function kpi(rot, a, b) {
+      var v = U.variacao(a, b);
       return '<div class="kpi"><span class="kpi-rot">' + rot + '</span><span class="kpi-num">' + U.fmtNum(a) + '</span>' +
-        (v ? '<span class="kpi-var var-' + v.dir + '">' + (v.dir === 'sobe' ? '▲ ' : v.dir === 'desce' ? '▼ ' : '') + v.txt + ' <span class="kpi-ref">vs. período anterior</span></span>' : '<span class="kpi-var">' + nota + '</span>') +
-        '</div>';
+        '<span class="kpi-var var-' + v.dir + '">' + (v.dir === 'sobe' ? '▲ ' : v.dir === 'desce' ? '▼ ' : '') + v.txt + ' <span class="kpi-ref">vs. período anterior</span></span></div>';
     }
 
-    var h = '<div class="cabeca-aba"><h1>Visão geral</h1><p class="sub">Mensagens das alunas no período escolhido. Mensagens da equipe não entram nas contagens.</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Visão geral</h1><p class="sub">O que as alunas trouxeram no período. Mensagens da equipe não entram nas contagens.</p></div>';
     if (naoRev) {
       h += '<p class="nota nota-revisao"><strong>' + naoRev + ' de ' + atual.length + '</strong> mensagens do período ainda têm só a classificação automática. ' +
         '<button type="button" class="link" data-acao="ir-revisao">Revisar agora</button></p>';
@@ -291,7 +304,7 @@
       kpi('Mensagens das alunas', atual.length, anterior.length) +
       kpi('Dúvidas', porTipoA.duvida || 0, porTipoB.duvida || 0) +
       kpi('Queixas e dificuldades', (porTipoA.queixa || 0) + (porTipoA.dificuldade || 0), (porTipoB.queixa || 0) + (porTipoB.dificuldade || 0)) +
-      kpi('Itens abertos na fila', abertos.length, null, 'pendentes e em andamento, qualquer data') +
+      kpi('Mensagens com objeção', comObj(atual), comObj(anterior)) +
       kpi('Depoimentos positivos', porTipoA.depoimento || 0, porTipoB.depoimento || 0) +
       kpi('Relatos de evolução', porTipoA.evolucao || 0, porTipoB.evolucao || 0) +
       '</section>';
@@ -302,7 +315,7 @@
       '<button type="button" data-acao="gran" data-v="semana" aria-pressed="' + (S.gran === 'semana') + '">Por semana</button></div></div>' +
       '<div id="grafico" class="grafico" role="img" aria-label="Gráfico de linhas com mensagens por canal ao longo do período"></div></section>';
 
-    // Temas
+    // Assuntos
     var temasA = U.contarPor(atual, 'tema'), temasB = U.contarPor(anterior, 'tema');
     var duvPorTema = U.contarPor(atual.filter(function (m) { return m.tipo === 'duvida'; }), 'tema');
     var ordem = Object.keys(temasA).sort(function (a, b) { return temasA[b] - temasA[a]; });
@@ -319,50 +332,48 @@
           '</button></li>';
       }).join('') + '</ul></section>';
 
-    // Tipos e canal
-    var maxTipo = 1;
-    C.TIPOS.forEach(function (t) { maxTipo = Math.max(maxTipo, porTipoA[t.id] || 0); });
+    // Objeções + canal
     var porCanal = U.contarPor(atual, 'canal');
     var tot = atual.length || 1;
     var wa = porCanal.whatsapp || 0, tg = porCanal.telegram || 0;
-    h += '<div class="pilha"><section class="painel-card"><h2>Tipo de conteúdo</h2><ul class="barras barras-simples">' +
-      C.TIPOS.map(function (t) {
-        var n = porTipoA[t.id] || 0;
-        return '<li><div class="barra-linha estatica"><span class="barra-rot">' + esc(t.nome) + '</span>' +
-          '<span class="barra-trilho"><span class="barra barra-tipo" style="width:' + Math.max(n ? 2 : 0, n / maxTipo * 100) + '%"></span></span>' +
-          '<span class="barra-num">' + n + '</span></div></li>';
-      }).join('') + '</ul></section>' +
+    var maxO = r.objecoes.length ? r.objecoes[0].n : 1;
+    h += '<div class="pilha"><section class="painel-card"><div class="card-topo"><h2>Objeções mais citadas</h2><button type="button" class="link" data-acao="aba" data-v="dores">Ver todas</button></div>' +
+      (r.objecoes.length ? '<ul class="barras barras-simples">' + r.objecoes.slice(0, 6).map(function (o) {
+        return '<li><div class="barra-linha estatica"><span class="barra-rot">"' + esc(o.obj.nome) + '"</span>' +
+          '<span class="barra-trilho"><span class="barra barra-tipo" style="width:' + Math.max(2, o.n / maxO * 100) + '%"></span></span>' +
+          '<span class="barra-num">' + o.n + '</span></div></li>';
+      }).join('') + '</ul>' : '<p class="sub">Nenhuma objeção encontrada no período.</p>') + '</section>' +
       '<section class="painel-card"><h2>Por canal</h2>' +
       '<div class="divisao" aria-hidden="true"><span class="div-wa" style="width:' + (wa / tot * 100) + '%"></span><span class="div-tg" style="width:' + (tg / tot * 100) + '%"></span></div>' +
       '<dl class="legenda-canais"><div><dt>' + canalTag('whatsapp') + '</dt><dd>' + wa + ' <span class="sub">(' + Math.round(wa / tot * 100) + '%)</span></dd></div>' +
       '<div><dt>' + canalTag('telegram') + '</dt><dd>' + tg + ' <span class="sub">(' + Math.round(tg / tot * 100) + '%)</span></dd></div></dl></section></div>';
     h += '</div>';
 
-    // Atenção + ideias
-    var ref = refFim();
-    var atencao = abertos.filter(function (m) { return m.acomp.status === 'pendente'; })
-      .sort(function (a, b) { return ordemPrio(a) - ordemPrio(b) || a.data - b.data; }).slice(0, 5);
-    h += '<div class="duas"><section class="painel-card"><div class="card-topo"><h2>Precisa de atenção</h2>' +
-      '<button type="button" class="link" data-acao="aba" data-v="fila">Abrir fila</button></div>' +
-      (atencao.length ? '<ul class="lista-curta">' + atencao.map(function (m) {
-        return '<li>' + prioPill(m.acomp.prioridade) + ' <span class="lc-texto">' + esc(textoSeguro(m)) + '</span><span class="lc-meta">' + canalTag(m.canal) + ' ' + esc(nomeTema(m.tema)) + ' · ' + U.fmtRel(m.data, Date.now() < ref ? ref : Date.now()) + '</span></li>';
-      }).join('') + '</ul>' : '<p class="sub">Nenhuma mensagem pendente com esses filtros.</p>') +
-      '</section>';
-    h += '<section class="painel-card"><div class="card-topo"><h2>Ideias de conteúdo a partir das dúvidas</h2><button type="button" class="link" data-acao="ir-pauta-conteudos">Ver pauta completa</button></div>' + blocoIdeias(atual, 3) + '</section></div>';
+    // Ideias + interação + cuidado
+    h += '<div class="duas"><section class="painel-card"><div class="card-topo"><h2>Ideias de conteúdo a partir das dúvidas</h2><button type="button" class="link" data-acao="aba" data-v="ideias">Ver pauta completa</button></div>' + blocoIdeias(atual, 3) + '</section>';
+    h += '<section class="painel-card"><div class="card-topo"><h2>O que mais gerou conversa no grupo</h2></div>' + blocoInteracao(r.interacao, 3) + '</section></div>';
+    var sinais = A.sinaisAlunas(msgsAlunas(), S.temas, iv[1]);
+    h += '<section class="painel-card"><div class="card-topo"><h2>Alunas que pedem um olhar mais próximo</h2><button type="button" class="link" data-acao="aba" data-v="ajuda">Como ajudar mais</button></div>' +
+      (sinais.length ? '<p>' + sinais.filter(function (s) { return s.tipo === 'dificuldade'; }).length + ' com dificuldade repetida na última semana e ' + sinais.filter(function (s) { return s.tipo === 'sumiu'; }).length + ' que pararam de escrever.</p>' : '<p class="sub">Nenhum sinal no momento.</p>') + '</section>';
     return h;
   }
 
-  function ordemPrio(m) { return { alta: 0, media: 1, baixa: 2 }[m.acomp.prioridade]; }
-
   function blocoIdeias(lista, n) {
     var duv = U.contarPor(lista.filter(function (m) { return m.tipo === 'duvida' || m.tipo === 'dificuldade'; }), 'tema');
-    var top = Object.keys(duv).filter(function (t) { var tm = S.temas.find(function (x) { return x.id === t; }); return tm && tm.ideia; })
+    var top = Object.keys(duv).filter(function (t) { var tm = S.temas.find(function (x) { return x.id === t; }); return tm && tm.ideia && tm.natureza !== 'entrega'; })
       .sort(function (a, b) { return duv[b] - duv[a]; }).slice(0, n);
     if (!top.length) return '<p class="sub">Ainda não há dúvidas suficientes no período.</p>';
     return '<ol class="ideias">' + top.map(function (t) {
       var tm = S.temas.find(function (x) { return x.id === t; });
       return '<li><span class="ideia-tema">' + esc(tm.nome) + ' <span class="sub">· ' + duv[t] + ' dúvidas e dificuldades</span></span><span>' + esc(tm.ideia) + '</span></li>';
-    }).join('') + '</ol><p class="nota-peq">Sugestões geradas por regras a partir dos assuntos mais frequentes. Não usam dados pessoais e devem ser revisadas antes de virar post. Edite as ideias em Configurações.</p>';
+    }).join('') + '</ol><p class="nota-peq">Sugestões geradas por regras a partir dos assuntos mais frequentes. Revise antes de virar post.</p>';
+  }
+
+  function blocoInteracao(inter, n) {
+    if (!inter.posts.length) return '<p class="sub">Sem mensagens da equipe no Telegram neste período. Ao importar o grupo, marque quem é da equipe para ver o que gera mais resposta.</p>';
+    return '<p class="sub">Média: ' + inter.media.toFixed(1).replace('.', ',') + ' respostas das alunas por mensagem sua (até 3 h depois).</p><ol class="ideias">' + inter.posts.slice(0, n).map(function (x) {
+      return '<li><span>' + citar(x.texto) + '</span><span class="sub">' + x.media.toFixed(1).replace('.', ',') + ' respostas em média' + (x.vezes > 1 ? ' · enviada ' + x.vezes + 'x' : '') + '</span></li>';
+    }).join('') + '</ol>';
   }
 
   function desenharGrafico() {
@@ -399,33 +410,32 @@
 
     h += '<section class="kpis kpis-4">' +
       '<div class="kpi"><span class="kpi-rot">Mensagens no dia</span><span class="kpi-num">' + r.total + '</span><span class="kpi-var">ontem: ' + r.ontem + ' · média 7 dias: ' + r.media7.toFixed(1).replace('.', ',') + '</span></div>' +
-      '<div class="kpi"><span class="kpi-rot">Novos itens para acompanhar</span><span class="kpi-num">' + r.novosAcomp + '</span><span class="kpi-var">' + r.novosAlta + ' de prioridade alta</span></div>' +
-      '<div class="kpi"><span class="kpi-rot">Pendentes há mais de 24 h</span><span class="kpi-num">' + r.atrasados + '</span><span class="kpi-var">em todo o histórico</span></div>' +
+      '<div class="kpi"><span class="kpi-rot">Dúvidas e dificuldades</span><span class="kpi-num">' + r.dores + '</span><span class="kpi-var">' + r.queixas + ' queixa(s)</span></div>' +
+      '<div class="kpi"><span class="kpi-rot">Mensagens com objeção</span><span class="kpi-num">' + r.objecoes + '</span><span class="kpi-var">' + (r.objTop ? 'mais citada: "' + esc(r.objTop) + '"' : 'nenhuma') + '</span></div>' +
       '<div class="kpi"><span class="kpi-rot">Depoimentos e evolução</span><span class="kpi-num">' + (r.depo + r.evol) + '</span><span class="kpi-var">' + r.autorizados + ' já autorizados para divulgação</span></div>' +
       '</section>';
 
     h += '<div class="duas"><section class="painel-card"><h2>Destaques</h2><ul class="destaques">' + r.destaques.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul></section>';
-    h += '<section class="painel-card"><h2>Precisa de atenção</h2>' + (r.atencao.length ? '<ul class="destaques">' + r.atencao.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul>' : '<p class="sub">Nada fora do normal neste dia.</p>') +
-      '<button type="button" class="link" data-acao="aba" data-v="fila">Abrir fila de acompanhamento</button></section></div>';
-    h += blocoSinais(dia);
+    h += '<section class="painel-card"><h2>Pede atenção</h2>' + (r.atencao.length ? '<ul class="destaques">' + r.atencao.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul>' : '<p class="sub">Nada fora do normal neste dia.</p>') + '</section></div>';
+    h += blocoSinais(U.fimDia(dia), 6);
     return h;
   }
 
   // Alunas que pedem um olhar mais próximo (uso interno; nunca vai para relatórios).
-  function blocoSinais(dia) {
-    var sinais = P.pauta.sinaisAlunas(msgsAlunas(), S.temas, U.fimDia(dia));
+  function blocoSinais(fim, limite) {
+    var sinais = A.sinaisAlunas(msgsAlunas(), S.temas, fim);
     var h = '<section class="painel-card"><div class="card-topo"><h2>Alunas que pedem um olhar mais próximo</h2><span class="chip chip-auto">Sinal automático, confirme antes de agir</span></div>' +
       '<p class="sub">Quem trouxe várias dificuldades na última semana ou parou de escrever. Uso interno: não entra em relatórios nem no resumo copiado.</p>';
-    if (!sinais.length) return h + '<p class="sub">Nenhum sinal neste dia.</p></section>';
-    return h + '<ul class="sinais">' + sinais.slice(0, 12).map(function (x) {
-      return '<li class="sinal-' + x.tipo + '"><span class="sinal-tag">' + (x.tipo === 'bloqueio' ? 'Dificuldade repetida' : 'Sumiu') + '</span>' +
+    if (!sinais.length) return h + '<p class="sub">Nenhum sinal neste momento.</p></section>';
+    return h + '<ul class="sinais">' + sinais.slice(0, limite).map(function (x) {
+      return '<li class="sinal-' + x.tipo + '"><span class="sinal-tag">' + (x.tipo === 'dificuldade' ? 'Dificuldade repetida' : 'Parou de escrever') + '</span>' +
         '<span class="item-quem">' + esc(rotuloAluna(x.alunaId)) + '</span><span class="sub">' + esc(x.motivo) + '</span>' +
         (x.ultima ? '<span class="lc-texto">Última mensagem (' + U.fmtData(x.ultima.data) + '): ' + esc(textoSeguro(x.ultima)) + '</span>' : '') + '</li>';
-    }).join('') + '</ul>' + (sinais.length > 12 ? '<p class="sub">+' + (sinais.length - 12) + ' outras.</p>' : '') + '</section>';
+    }).join('') + '</ul>' + (sinais.length > limite ? '<p class="sub">+' + (sinais.length - limite) + ' outras. <button type="button" class="link" data-acao="aba" data-v="ajuda">Ver todas</button></p>' : '') + '</section>';
   }
 
   function calcularResumo(dia) {
-    var todas = msgsAlunas().filter(function (m) { return passaFiltros(m, { ignorarStatus: true }); });
+    var todas = msgsAlunas().filter(passaFiltros);
     function doDia(d) { var a = U.inicioDia(d), b = U.fimDia(d); return todas.filter(function (m) { return m.data >= a && m.data <= b; }); }
     var hoje = doDia(dia), ontem = doDia(U.somarDias(dia, -1));
     var semana = todas.filter(function (m) { return m.data >= U.somarDias(dia, -7) && m.data < dia; });
@@ -435,13 +445,19 @@
     var subiram = Object.keys(temasHoje).filter(function (t) { return temasHoje[t] >= 3 && temasHoje[t] >= 2 * ((temasSem[t] || 0) / 7) + 1; })
       .sort(function (a, b) { return temasHoje[b] - temasHoje[a]; });
     var porCanal = U.contarPor(hoje, 'canal');
-    var acomp = hoje.filter(function (m) { return m.acomp; });
-    var limite = U.fimDia(dia) - 86400000;
-    var atrasados = todas.filter(function (m) { return m.acomp && m.acomp.status === 'pendente' && m.data < limite; });
     var depo = hoje.filter(function (m) { return m.tipo === 'depoimento'; }).length;
     var evol = hoje.filter(function (m) { return m.tipo === 'evolucao'; }).length;
     var autorizados = hoje.filter(function (m) { return m.aut && m.aut.status === 'divulgacao'; }).length;
     var queixas = hoje.filter(function (m) { return m.tipo === 'queixa'; });
+    var objContagem = {};
+    var comObj = hoje.filter(function (m) {
+      if (ehProva(m)) return false;
+      var ids = A.detectar(m.texto, S.objecoes);
+      ids.forEach(function (id) { objContagem[id] = (objContagem[id] || 0) + 1; });
+      return ids.length > 0;
+    });
+    var objTopId = Object.keys(objContagem).sort(function (a, b) { return objContagem[b] - objContagem[a]; })[0];
+    var objTop = objTopId ? S.objecoes.find(function (o) { return o.id === objTopId; }) : null;
     var v = U.variacao(hoje.length, ontem.length);
 
     var destaques = [];
@@ -450,87 +466,136 @@
     subiram.forEach(function (t) {
       destaques.push('<strong>' + esc(nomeTema(t)) + '</strong> subiu: ' + temasHoje[t] + ' hoje contra média de ' + ((temasSem[t] || 0) / 7).toFixed(1).replace('.', ',') + ' por dia na semana anterior.');
     });
+    if (objTop) destaques.push('Objeção mais citada: <strong>"' + esc(objTop.nome) + '"</strong> (' + objContagem[objTopId] + 'x). Ângulo: ' + esc(objTop.quebra));
     if (depo || evol) destaques.push(depo + ' depoimento(s) positivo(s) e ' + evol + ' relato(s) de evolução. Confira a autorização antes de qualquer uso externo.');
 
     var atencao = [];
-    var alta = acomp.filter(function (m) { return m.acomp.prioridade === 'alta' && m.acomp.status !== 'concluido'; });
-    if (alta.length) atencao.push('<strong>' + alta.length + '</strong> item(ns) de prioridade alta ainda abertos deste dia.');
-    if (atrasados.length) atencao.push('<strong>' + atrasados.length + '</strong> mensagem(ns) pendente(s) há mais de 24 h.');
     if (queixas.length) {
       var qt = U.contarPor(queixas, 'tema');
       var principal = Object.keys(qt).sort(function (a, b) { return qt[b] - qt[a]; })[0];
       atencao.push('<strong>' + queixas.length + '</strong> queixa(s) no dia, principalmente sobre ' + esc(nomeTema(principal)) + '.');
     }
+    var semAut = hoje.filter(function (m) { return ehProva(m) && (!m.aut || m.aut.status === 'nao_solicitada'); }).length;
+    if (semAut) atencao.push(semAut + ' relato(s) ou depoimento(s) sem pedido de autorização. Bom momento para pedir.');
     var naoRev = hoje.filter(function (m) { return !m.revisado; }).length;
     if (naoRev) atencao.push(naoRev + ' classificação(ões) automática(s) ainda sem revisão.');
 
     return {
       dia: dia, total: hoje.length, ontem: ontem.length, media7: media7,
-      novosAcomp: acomp.length, novosAlta: acomp.filter(function (m) { return m.acomp.prioridade === 'alta'; }).length,
-      atrasados: atrasados.length, depo: depo, evol: evol, autorizados: autorizados,
+      dores: hoje.filter(function (m) { return m.tipo === 'duvida' || m.tipo === 'dificuldade'; }).length, queixas: queixas.length,
+      objecoes: comObj.length, objTop: objTop ? objTop.nome : '',
+      depo: depo, evol: evol, autorizados: autorizados,
       destaques: destaques, atencao: atencao
     };
   }
 
   function textoPlano(html) { var d = document.createElement('div'); d.innerHTML = html; return d.textContent; }
 
-  /* ---------- Fila ---------- */
+  /* ---------- Dores e objeções ---------- */
 
-  function abaFila() {
-    var f = S.fila;
-    var iv = intervalo();
-    var base = msgsAlunas().filter(function (m) { return m.acomp && passaFiltros(m, { ignorarStatus: true }); });
-    var cont = U.contarPor(base, function (m) { return m.acomp.status; });
-    var lista = base.filter(function (m) {
-      if (f.status === 'abertos' && m.acomp.status === 'concluido') return false;
-      if (f.status !== 'abertos' && f.status !== 'todos' && m.acomp.status !== f.status) return false;
-      if ((f.status === 'concluido' || f.status === 'todos') && (m.data < iv[0] || m.data > iv[1])) return false;
-      if (f.prioridade && m.acomp.prioridade !== f.prioridade) return false;
-      if (f.responsavel === '__sem' ? m.acomp.responsavel : (f.responsavel && m.acomp.responsavel !== f.responsavel)) return false;
-      return true;
-    }).sort(function (a, b) {
-      var sa = a.acomp.status === 'concluido' ? 1 : 0, sb = b.acomp.status === 'concluido' ? 1 : 0;
-      return sa - sb || ordemPrio(a) - ordemPrio(b) || a.data - b.data;
-    });
+  function abaDores() {
+    var a = analisePeriodo();
+    var dores = a.lista.filter(ehDor);
+    var h = '<div class="cabeca-aba"><h1>Dores e objeções</h1><p class="sub">O que trava as alunas, nas palavras delas. As objeções são crenças que aparecem nas mensagens e podem virar post de "mito x verdade" ou entrar no acolhimento do grupo.</p></div>';
+    h += subnav('subDores', [['objecoes', 'Objeções', a.r.objecoes.length], ['assuntos', 'Dores por assunto', dores.length]]);
 
-    var h = '<div class="cabeca-aba"><h1>Fila de acompanhamento</h1><p class="sub">Dúvidas, queixas e dificuldades que precisam de resposta. Itens abertos aparecem independentemente do período; concluídos seguem o período do filtro. Prioridade e status iniciais são sugestões automáticas.</p></div>';
-    h += '<div class="contadores">' +
-      ['pendente', 'andamento', 'concluido'].map(function (s) { return '<span class="contador st-' + s + '"><strong>' + (cont[s] || 0) + '</strong> ' + STATUS[s] + '</span>'; }).join('') + '</div>';
-    h += '<div class="linha-controles">' +
-      '<label class="campo"><span>Mostrar</span><select id="fila-status" data-mudar="fila-filtro" data-k="status">' + opcoes({ abertos: 'Abertos (pendente e em andamento)', pendente: 'Só pendentes', andamento: 'Só em andamento', concluido: 'Concluídos', todos: 'Todos' }, f.status) + '</select></label>' +
-      '<label class="campo"><span>Prioridade</span><select id="fila-prio" data-mudar="fila-filtro" data-k="prioridade">' + opcoes(PRIORIDADES, f.prioridade, 'Todas') + '</select></label>' +
-      '<label class="campo"><span>Responsável</span><select id="fila-resp" data-mudar="fila-filtro" data-k="responsavel">' + opcoes(Object.assign({ __sem: 'Sem responsável' }, mapaEquipe()), f.responsavel, 'Qualquer') + '</select></label>' +
-      '</div>';
-    if (!pode('editar')) h += semPermissao('alterar status, prioridade ou responsável');
-    if (!lista.length) return h + vazio('Nada por aqui', 'Nenhum item com esses filtros.');
-    var mostrar = lista.slice(0, S.limite);
-    h += '<p class="sub">' + lista.length + ' item(ns).</p><div class="itens">' + mostrar.map(itemFila).join('') + '</div>';
-    if (lista.length > mostrar.length) h += '<button type="button" class="btn btn-sec mais" data-acao="mais">Mostrar mais ' + Math.min(40, lista.length - mostrar.length) + '</button>';
+    if (S.subDores === 'objecoes') {
+      if (!a.r.objecoes.length) return h + vazio('Nenhuma objeção no período', 'Mude o período ou edite as objeções em Configurações.');
+      return h + '<div class="grupos">' + a.r.objecoes.map(function (o) {
+        var v = U.variacao(o.n, o.antes);
+        return '<section class="painel-card grupo"><div class="card-topo"><h2>"' + esc(o.obj.nome) + '"</h2><span class="grupo-num">' + o.n + '</span></div>' +
+          '<p class="sub">' + v.txt + ' vs. período anterior' + (o.dia ? ' · aparece mais ' + o.dia.aos + ' (' + o.dia.pct + '%)' : '') + '</p>' +
+          '<ul class="citacoes">' + o.exemplos.map(function (e) { return '<li><q>' + esc(e.texto) + '</q><span class="sub">' + e.n + ' vez(es)</span></li>'; }).join('') + '</ul>' +
+          '<div class="quebra"><span class="quebra-rot">Como quebrar (seu método)</span><p>' + esc(o.obj.quebra) + '</p></div>' +
+          '<p class="sub">Prova social: ' + (o.prontas.length ? o.prontas.length + ' relato(s) autorizado(s), como ' + citar(textoSeguro(o.prontas[0])) : 'nenhum autorizado') + (o.aguardando ? ' · ' + o.aguardando + ' aguardando autorização' : '') + '</p>' +
+          '</section>';
+      }).join('') + '</div>';
+    }
+
+    if (!dores.length) return h + vazio('Nada neste período', 'Mude o período ou os filtros para ver mais.');
+    var porTema = {};
+    dores.forEach(function (m) { (porTema[m.tema] = porTema[m.tema] || []).push(m); });
+    var ordem = Object.keys(porTema).sort(function (a2, b) { return porTema[b].length - porTema[a2].length; });
+    return h + '<div class="grupos">' + ordem.map(function (t) {
+      var ms = porTema[t];
+      var tm = S.temas.find(function (x) { return x.id === t; }) || {};
+      var c = U.contarPor(ms, 'tipo');
+      var gs = P.pauta.agrupar(ms, textoSeguro).slice(0, 4);
+      return '<section class="painel-card grupo"><div class="card-topo"><h2>' + esc(nomeTema(t)) + '</h2><span class="grupo-num">' + ms.length + '</span></div>' +
+        '<p class="sub">' + (c.duvida || 0) + ' dúvidas · ' + (c.dificuldade || 0) + ' dificuldades · ' + (c.queixa || 0) + ' queixas · <span class="chip">' + esc(NATUREZAS[tm.natureza] || 'Vira conteúdo') + '</span></p>' +
+        '<ul class="citacoes">' + gs.map(function (g) { return '<li><q>' + esc(g.principal) + '</q><span class="sub">' + g.itens.length + ' vez(es)</span></li>'; }).join('') + '</ul></section>';
+    }).join('') + '</div>';
+  }
+
+  /* ---------- Antes e depois e resultados ---------- */
+
+  function abaResultados() {
+    var a = analisePeriodo();
+    var provas = a.lista.filter(ehProva);
+    var h = '<div class="cabeca-aba"><h1>Antes e depois e resultados</h1><p class="sub">Relatos de evolução, depoimentos e fotos, com controle de autorização. Nada é público por padrão.</p></div>';
+    h += subnav('subRes', [['ideias', 'Ideias de antes e depois'], ['relatos', 'Relatos e depoimentos', provas.length], ['fotos', 'Fotos', conj().midias.length]]);
+    if (S.subRes === 'fotos') return h + subFotos();
+    if (S.subRes === 'relatos') {
+      if (!provas.length) return h + vazio('Nada neste período', 'Mude o período ou os filtros para ver mais.');
+      if (!pode('editar')) h += semPermissao('registrar autorizações');
+      return h + '<div class="itens">' + provas.sort(function (x, y) { return y.data - x.data; }).slice(0, S.limite).map(function (m) {
+        return '<article class="item item-depo"><div class="item-topo">' + canalTag(m.canal) + '<span class="chip">' + esc(nomeTipo(m.tipo)) + '</span><span class="item-quem">' + esc(rotuloAluna(m.alunaId)) + '</span><time>' + U.fmtDataHora(m.data) + '</time></div>' +
+          '<blockquote class="item-texto depo">' + esc(textoSeguro(m)) + '</blockquote>' +
+          '<div class="item-meta">' + A.detectar(m.texto, S.resultados).map(function (id) { var rr = S.resultados.find(function (x) { return x.id === id; }); return '<span class="chip">' + esc(rr.nome) + '</span>'; }).join('') +
+          classeChip(m) + autChip(m.aut) + (prontoDivulgacao(m) ? '<span class="chip chip-pronto">Pode ir para divulgação</span>' : '') + '</div>' +
+          formAut('msg', m) + '</article>';
+      }).join('') + '</div>' + (provas.length > S.limite ? '<button type="button" class="btn btn-sec mais" data-acao="mais">Mostrar mais</button>' : '');
+    }
+
+    // Ideias de antes e depois
+    var res = a.r.resultados;
+    var cand = A.candidatasAntesDepois(msgsAlunas(), conj().midias, a.iv[1]);
+    h += '<p class="nota">Resultados vão além da foto do corpo. Cada tipo de resultado relatado pelas alunas sugere um formato de antes e depois, alinhado à sua mensagem de constância. Use só material com autorização para divulgação.</p>';
+    h += '<div class="grupos">' + res.map(function (r) {
+      return '<section class="painel-card grupo"><div class="card-topo"><h2>' + esc(r.res.nome) + '</h2><span class="grupo-num">' + r.n + '</span></div>' +
+        '<p class="sub">' + r.prontas.length + ' autorizado(s) para divulgação · ' + r.aguardando + ' sem autorização</p>' +
+        '<div class="quebra"><span class="quebra-rot">Ideia de antes e depois</span><p>' + esc(r.res.ideia) + '</p></div>' +
+        (r.msgs.length ? '<ul class="citacoes">' + r.msgs.filter(function (m, i, arr) { return arr.findIndex(function (x) { return x.texto === m.texto; }) === i; }).slice(0, 2).map(function (m) { return '<li><q>' + esc(textoSeguro(m)) + '</q><span class="sub">' + esc(AUT[(m.aut || {}).status] || 'Sem registro') + '</span></li>'; }).join('') + '</ul>' : '<p class="sub">Nenhum relato desse tipo no período. Vale perguntar no grupo.</p>') +
+        '</section>';
+    }).join('') + '</div>';
+    h += '<section class="painel-card"><div class="card-topo"><h2>Convidar para antes e depois</h2><span class="chip chip-auto">Sugestão automática</span></div>' +
+      '<p class="sub">Alunas que relataram evolução nos últimos 30 dias e ainda não têm foto registrada. Convide com o termo de autorização. A participação é opcional.</p>' +
+      (cand.length ? '<ul class="sinais">' + cand.slice(0, 12).map(function (c) {
+        return '<li class="sinal-convite"><span class="sinal-tag">' + c.n + ' relato(s)</span><span class="item-quem">' + esc(rotuloAluna(c.alunaId)) + '</span><span class="lc-texto">' + citar(textoSeguro(c.ultima)) + '</span></li>';
+      }).join('') + '</ul>' : '<p class="sub">Ninguém nessa situação agora.</p>') + '</section>';
     return h;
   }
 
-  function itemFila(m) {
-    var a = m.acomp, dis = pode('editar') ? '' : ' disabled';
-    var ref = Math.max(Date.now(), 0);
-    var h = '<article class="item prio-borda-' + a.prioridade + (a.status === 'concluido' ? ' item-ok' : '') + '">' +
-      '<div class="item-topo">' + prioPill(a.prioridade) + canalTag(m.canal) + '<span class="item-quem">' + esc(rotuloAluna(m.alunaId)) + '</span>' +
-      '<time datetime="' + new Date(m.data).toISOString() + '" title="' + U.fmtDataHora(m.data) + '">' + U.fmtDataHora(m.data) + ' · ' + U.fmtRel(m.data, ref) + '</time></div>' +
-      '<p class="item-texto">' + esc(textoSeguro(m)) + '</p>' +
-      '<div class="item-meta"><span class="chip">' + esc(nomeTema(m.tema)) + '</span><span class="chip">' + esc(nomeTipo(m.tipo)) + '</span>' + classeChip(m) + (a.sugerido ? '<span class="chip chip-auto">Prioridade sugerida</span>' : '') + '</div>' +
-      '<div class="item-acoes">' +
-      '<label class="campo campo-peq"><span>Status</span><select id="st-' + m.id + '" data-mudar="fila-campo" data-campo="status" data-id="' + m.id + '"' + dis + '>' + opcoes(STATUS, a.status) + '</select></label>' +
-      '<label class="campo campo-peq"><span>Prioridade</span><select id="pr-' + m.id + '" data-mudar="fila-campo" data-campo="prioridade" data-id="' + m.id + '"' + dis + '>' + opcoes(PRIORIDADES, a.prioridade) + '</select></label>' +
-      '<label class="campo campo-peq"><span>Responsável</span><select id="rp-' + m.id + '" data-mudar="fila-campo" data-campo="responsavel" data-id="' + m.id + '"' + dis + '>' + opcoes(mapaEquipe(), a.responsavel, 'Ninguém ainda') + '</select></label>' +
-      (pode('contato') ? '<button type="button" class="btn btn-sec btn-peq" data-acao="ver-contato" data-id="' + m.id + '" aria-expanded="' + !!S.contatos[m.id] + '">' + (S.contatos[m.id] ? 'Ocultar contato' : 'Ver contato') + '</button>' : '') +
+  function formAut(alvo, obj) {
+    if (!pode('editar')) return '';
+    var aut = obj.aut || { status: 'nao_solicitada', confirmadoPor: '' };
+    return '<div class="form-aut" data-alvo="' + alvo + '" data-id="' + obj.id + '">' +
+      '<label class="campo campo-peq"><span>Autorização</span><select id="as-' + obj.id + '">' + opcoes(AUT, aut.status) + '</select></label>' +
+      '<label class="campo campo-peq"><span>Quem confirmou</span><select id="ap-' + obj.id + '">' + opcoes(mapaEquipe(), aut.confirmadoPor, 'Ninguém ainda') + '</select></label>' +
+      '<button type="button" class="btn btn-sec btn-peq" data-acao="registrar-aut" data-alvo="' + alvo + '" data-id="' + obj.id + '">Registrar</button>' +
+      '<p class="erro" id="ae-' + obj.id + '" hidden></p>' +
+      (aut.data ? '<p class="nota-peq">Último registro: ' + U.fmtDataAno(aut.data) + '</p>' : '') +
       '</div>';
-    if (S.contatos[m.id] && pode('contato')) {
-      var al = alunasAtuais()[m.alunaId] || {};
-      h += '<div class="restrito"><p class="restrito-tit">Área restrita · acesso registrado</p><dl>' +
-        '<div><dt>Nome</dt><dd>' + esc((al.nome || '') + ' ' + (al.sobrenome || '')) + '</dd></div>' +
-        '<div><dt>Contato</dt><dd class="mono">' + esc(al.telefone || 'não informado') + '</dd></div>' +
-        '<div><dt>Mensagem original</dt><dd>' + esc(m.texto) + '</dd></div></dl></div>';
-    }
-    return h + '</article>';
+  }
+
+  /* ---------- Ideias de conteúdo ---------- */
+
+  function abaIdeias() {
+    var a = analisePeriodo();
+    return '<div class="cabeca-aba"><h1>Ideias de conteúdo</h1><p class="sub">Pauta montada a partir do que as alunas trouxeram de ' + U.fmtDataAno(a.iv[0]) + ' a ' + U.fmtDataAno(a.iv[1]) + '. Para exportar e compartilhar, use <button type="button" class="link" data-acao="ir-pauta">Relatórios</button>.</p></div>' +
+      '<section class="painel-card relatorio">' + a.r.html + '</section>';
+  }
+
+  /* ---------- Como ajudar mais ---------- */
+
+  function abaAjuda() {
+    var a = analisePeriodo();
+    var h = '<div class="cabeca-aba"><h1>Como ajudar mais</h1><p class="sub">Sugestões para melhorar a entrega e o cuidado com as alunas, cada uma com a evidência que a gerou. São pontos de partida para a sua decisão, não ordens.</p></div>';
+    h += a.r.sugestoes.length ? '<div class="grupos">' + a.r.sugestoes.map(function (x) {
+      return '<section class="painel-card grupo sug"><span class="chip">' + esc(x.area) + '</span><h2>' + esc(x.titulo) + '</h2><p>' + esc(x.detalhe) + '</p><p class="sub">Evidência: ' + esc(x.evidencia) + '</p></section>';
+    }).join('') + '</div>' : vazio('Nenhuma sugestão', 'Poucos dados no período.');
+    h += blocoSinais(a.iv[1], 30);
+    return h;
   }
 
   /* ---------- Mensagens e revisão ---------- */
@@ -557,9 +622,11 @@
     var dis = pode('editar') ? '' : ' disabled';
     el.innerHTML = '<p class="sub">' + lista.length + ' mensagem(ns) encontrada(s).</p>' +
       (lista.length ? '<div class="itens">' + mostrar.map(function (m) {
+        var objs = A.detectar(m.texto, S.objecoes);
         return '<article class="item"><div class="item-topo">' + canalTag(m.canal) + '<span class="item-quem">' + esc(rotuloAluna(m.alunaId)) + '</span><time>' + U.fmtDataHora(m.data) + '</time></div>' +
           '<p class="item-texto">' + esc(textoSeguro(m)) + '</p>' +
-          '<div class="item-meta">' + classeChip(m) + (m.aut ? autChip(m.aut) : '') + '</div>' +
+          '<div class="item-meta">' + classeChip(m) + (m.aut ? autChip(m.aut) : '') +
+          objs.map(function (id) { var o = S.objecoes.find(function (x) { return x.id === id; }); return '<span class="chip chip-obj">Objeção: ' + esc(o.nome) + '</span>'; }).join('') + '</div>' +
           '<div class="item-acoes">' +
           '<label class="campo campo-peq"><span>Tipo</span><select id="ct-' + m.id + '"' + dis + '>' + opcoes(mapaTipos(), m.tipo) + '</select></label>' +
           '<label class="campo campo-peq"><span>Assunto</span><select id="cm-' + m.id + '"' + dis + '>' + opcoes(mapaTemas(), m.tema) + '</select></label>' +
@@ -569,81 +636,9 @@
       (lista.length > mostrar.length ? '<button type="button" class="btn btn-sec mais" data-acao="mais">Mostrar mais ' + Math.min(40, lista.length - mostrar.length) + '</button>' : '');
   }
 
-  /* ---------- Conteúdos ---------- */
-
-  function abaConteudos() {
-    var iv = intervalo();
-    var lista = filtrar(msgsAlunas(), iv);
-    var h = '<div class="cabeca-aba"><h1>Conteúdos</h1><p class="sub">Separação entre acompanhamento interno e material que pode ser usado em divulgação. Nada daqui é público: só aparece como "pronto para divulgação" o que tiver autorização registrada.</p></div>';
-    h += '<div class="subnav" role="tablist">' + SUBCONTEUDOS.map(function (s) {
-      var n = s.id === 'ideias' ? '' : ' <span class="sub">' + lista.filter(function (m) { return m.tipo === s.id; }).length + '</span>';
-      return '<button type="button" role="tab" data-acao="sub" data-v="' + s.id + '" aria-selected="' + (S.sub === s.id) + '">' + esc(s.nome) + n + '</button>';
-    }).join('') + '<button type="button" data-acao="aba" data-v="fotos">Antes e depois →</button></div>';
-
-    if (S.sub === 'ideias') {
-      var pa = construirPauta(lista, filtrar(msgsAlunas(), intervaloAnterior(iv)));
-      return h + '<p class="nota">Pauta gerada a partir das mensagens do período (' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + '). Para exportar e compartilhar com a equipe, use <button type="button" class="link" data-acao="ir-pauta">Relatórios → Pauta de conteúdo</button>.</p>' +
-        '<section class="painel-card relatorio">' + pa.html + '</section>';
-    }
-
-    var doTipo = lista.filter(function (m) { return m.tipo === S.sub; });
-    if (!doTipo.length) return h + vazio('Nada neste período', 'Mude o período ou os filtros para ver mais.');
-
-    if (S.sub === 'queixa' || S.sub === 'dificuldade') {
-      var porTema = {};
-      doTipo.forEach(function (m) { (porTema[m.tema] = porTema[m.tema] || []).push(m); });
-      var ordem = Object.keys(porTema).sort(function (a, b) { return porTema[b].length - porTema[a].length; });
-      return h + '<div class="grupos">' + ordem.map(function (t) {
-        var ms = porTema[t].sort(function (a, b) { return b.data - a.data; });
-        var abertos = ms.filter(function (m) { return m.acomp && m.acomp.status !== 'concluido'; }).length;
-        return '<section class="painel-card grupo"><div class="card-topo"><h2>' + esc(nomeTema(t)) + '</h2><span class="grupo-num">' + ms.length + '</span></div>' +
-          '<p class="sub">' + abertos + ' ainda aberta(s) na fila · ' + ms.filter(function (m) { return !m.revisado; }).length + ' sem revisão</p>' +
-          '<ul class="citacoes">' + ms.slice(0, 4).map(function (m) { return '<li><q>' + esc(textoSeguro(m)) + '</q><span class="sub">' + CANAIS[m.canal] + ' · ' + U.fmtData(m.data) + '</span></li>'; }).join('') + '</ul></section>';
-      }).join('') + '</div>';
-    }
-
-    // Depoimentos e evolução: com registro de autorização.
-    if (!pode('editar')) h += semPermissao('registrar autorizações');
-    return h + '<div class="itens">' + doTipo.sort(function (a, b) { return b.data - a.data; }).slice(0, S.limite).map(function (m) {
-      return '<article class="item item-depo"><div class="item-topo">' + canalTag(m.canal) + '<span class="item-quem">' + esc(rotuloAluna(m.alunaId)) + '</span><time>' + U.fmtDataHora(m.data) + '</time></div>' +
-        '<blockquote class="item-texto depo">' + esc(textoSeguro(m)) + '</blockquote>' +
-        '<div class="item-meta"><span class="chip">' + esc(nomeTema(m.tema)) + '</span>' + classeChip(m) + autChip(m.aut) +
-        (prontoDivulgacao(m) ? '<span class="chip chip-pronto">Pode entrar no relatório de divulgação</span>' : '') + '</div>' +
-        formAut('msg', m) + '</article>';
-    }).join('') + '</div>';
-  }
-
-  function atrasadosAgora() {
-    var limite = Date.now() - 86400000;
-    return msgsAlunas().filter(function (m) { return m.acomp && m.acomp.status === 'pendente' && m.data < limite && passaFiltros(m, { ignorarStatus: true }); }).length;
-  }
-
-  function construirPauta(lista, anterior) {
-    return P.pauta.construir({
-      lista: lista, anterior: anterior, temas: S.temas,
-      textoSeguro: textoSeguro, nomeTema: nomeTema, pronto: prontoDivulgacao, atrasados: atrasadosAgora()
-    });
-  }
-
-  function prontoDivulgacao(m) { return m.revisado && m.aut && m.aut.status === 'divulgacao' && !!m.aut.confirmadoPor; }
-
-  function formAut(alvo, obj) {
-    if (!pode('editar')) return '';
-    var aut = obj.aut || { status: 'nao_solicitada', confirmadoPor: '' };
-    return '<div class="form-aut" data-alvo="' + alvo + '" data-id="' + obj.id + '">' +
-      '<label class="campo campo-peq"><span>Autorização</span><select id="as-' + obj.id + '">' + opcoes(AUT, aut.status) + '</select></label>' +
-      '<label class="campo campo-peq"><span>Quem confirmou</span><select id="ap-' + obj.id + '">' + opcoes(mapaEquipe(), aut.confirmadoPor, 'Ninguém ainda') + '</select></label>' +
-      '<button type="button" class="btn btn-sec btn-peq" data-acao="registrar-aut" data-alvo="' + alvo + '" data-id="' + obj.id + '">Registrar</button>' +
-      '<p class="erro" id="ae-' + obj.id + '" hidden></p>' +
-      (aut.data ? '<p class="nota-peq">Último registro: ' + U.fmtDataAno(aut.data) + '</p>' : '') +
-      '</div>';
-  }
-
-  /* ---------- Antes e depois ---------- */
-
-  function abaFotos() {
+  function subFotos() {
     var ms = conj().midias;
-    var h = '<div class="cabeca-aba"><h1>Antes e depois</h1><p class="sub">Acesso restrito. O arquivo original nunca é alterado: o desfoque gera uma cópia tratada separada, com prévia antes de salvar. Nada fica público por padrão.</p></div>';
+    var h = '<p class="sub">Acesso restrito. O arquivo original nunca é alterado: o desfoque gera uma cópia tratada separada, com prévia antes de salvar. Nada fica público por padrão.</p>';
     if (S.modo === 'demo') {
       h += '<p class="nota">As imagens abaixo são <strong>ilustrações fictícias</strong> (silhuetas desenhadas pelo painel), não fotos de pessoas. Servem para testar o fluxo de autorização e desfoque.</p>';
     } else if (pode('editar')) {
@@ -784,12 +779,12 @@
     var lista = S.rel.soRevisadas ? base.filter(function (m) { return m.revisado; }) : base;
     var demo = S.modo === 'demo';
     var sec = S.rel.secoes;
-    var filtrosTxt = ['canal', 'tema', 'tipo', 'autorizacao', 'status'].filter(function (k) { return S.filtros[k]; }).map(function (k) {
+    var filtrosTxt = ['canal', 'tema', 'tipo', 'autorizacao'].filter(function (k) { return S.filtros[k]; }).map(function (k) {
       var v = S.filtros[k];
-      return { canal: 'Canal: ' + CANAIS[v], tema: 'Assunto: ' + nomeTema(v), tipo: 'Tipo: ' + nomeTipo(v), autorizacao: 'Autorização: ' + AUT[v], status: 'Acompanhamento: ' + (STATUS[v] || 'Não precisa') }[k];
+      return { canal: 'Canal: ' + CANAIS[v], tema: 'Assunto: ' + nomeTema(v), tipo: 'Tipo: ' + nomeTipo(v), autorizacao: 'Autorização: ' + AUT[v] }[k];
     });
     var h = [], t = [], csv = [];
-    var titulo = { pauta: 'Pauta de conteúdo e necessidades das alunas', interno: 'Relatório interno de acompanhamento', divulgacao: 'Material autorizado para divulgação' }[S.rel.tipo];
+    var titulo = { pauta: 'Pauta de conteúdo e necessidades das alunas', interno: 'Relatório interno em números', divulgacao: 'Material autorizado para divulgação' }[S.rel.tipo];
     if (demo) { h.push('<p class="rel-demo">DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO</p>'); t.push('*** DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO ***'); }
     h.push('<h2>' + titulo + '</h2>');
     var cab = 'Período: ' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + (filtrosTxt.length ? ' · ' + filtrosTxt.join(' · ') : '') + ' · Gerado em ' + U.fmtDataHora(Date.now());
@@ -802,7 +797,7 @@
     if (S.rel.tipo === 'pauta') {
       var anteriorRel = filtrar(msgsAlunas(), intervaloAnterior(iv));
       if (S.rel.soRevisadas) anteriorRel = anteriorRel.filter(function (m) { return m.revisado; });
-      var pa = construirPauta(lista, anteriorRel);
+      var pa = analisar(lista, anteriorRel, iv);
       return { html: h.join('') + pa.html, texto: t.join('\n') + '\n' + pa.texto, csv: pa.csv };
     }
 
@@ -842,16 +837,14 @@
       ord.forEach(function (k) { t.push('- ' + nomeTema(k) + ': ' + porTema[k]); });
       t.push('');
     }
-    if (sec.queixas) {
+    if (sec.dores) {
       var qd = lista.filter(function (m) { return m.tipo === 'queixa' || m.tipo === 'dificuldade'; });
       var gq = {};
       qd.forEach(function (m) { (gq[m.tema] = gq[m.tema] || []).push(m); });
       h.push('<h3>Queixas e dificuldades por assunto</h3>');
       t.push('QUEIXAS E DIFICULDADES');
       Object.keys(gq).sort(function (a, b) { return gq[b].length - gq[a].length; }).forEach(function (k) {
-        var ex = {};
-        gq[k].forEach(function (m) { ex[textoSeguro(m)] = true; });
-        var exs = Object.keys(ex).slice(0, 2);
+        var exs = P.pauta.agrupar(gq[k], textoSeguro).slice(0, 2).map(function (g) { return g.principal; });
         h.push('<p><strong>' + esc(nomeTema(k)) + '</strong> (' + gq[k].length + '): ' + exs.map(function (e) { return '<q>' + esc(e) + '</q>'; }).join(' ') + '</p>');
         t.push('- ' + nomeTema(k) + ' (' + gq[k].length + '): ' + exs.map(function (e) { return '"' + e + '"'; }).join(' '));
       });
@@ -859,25 +852,18 @@
       t.push('');
     }
     if (sec.depoimentos) {
-      var dep = lista.filter(function (m) { return m.tipo === 'depoimento' || m.tipo === 'evolucao'; });
+      var dep = lista.filter(ehProva);
       var autorizados = dep.filter(function (m) { return m.aut && (m.aut.status === 'uso_interno' || m.aut.status === 'divulgacao') && m.aut.confirmadoPor; });
       h.push('<h3>Depoimentos e relatos de evolução</h3><p>' + dep.length + ' no período. ' + autorizados.length + ' com autorização registrada (texto abaixo). ' + (dep.length - autorizados.length) + ' sem autorização: só contados, sem texto.</p>' +
         (autorizados.length ? '<ul class="rel-lista">' + autorizados.slice(0, 15).map(function (m) { return '<li><q>' + esc(textoSeguro(m)) + '</q> <span>(' + esc(AUT[m.aut.status]) + ')</span></li>'; }).join('') + '</ul>' : ''));
       t.push('DEPOIMENTOS E EVOLUÇÃO: ' + dep.length + ' no período, ' + autorizados.length + ' com autorização registrada.');
       autorizados.slice(0, 15).forEach(function (m) { t.push('- "' + textoSeguro(m) + '" (' + AUT[m.aut.status] + ')'); });
-      t.push('');
-    }
-    if (sec.pendencias) {
-      var ab = msgsAlunas().filter(function (m) { return m.acomp && m.acomp.status !== 'concluido' && passaFiltros(m, { ignorarStatus: true }); });
-      var porP = U.contarPor(ab, function (m) { return m.acomp.prioridade; });
-      var porS = U.contarPor(ab, function (m) { return m.acomp.status; });
-      h.push('<h3>Pendências (hoje)</h3><p>' + ab.length + ' item(ns) aberto(s): ' + (porS.pendente || 0) + ' pendente(s), ' + (porS.andamento || 0) + ' em andamento. Prioridade alta: ' + (porP.alta || 0) + ', média: ' + (porP.media || 0) + ', baixa: ' + (porP.baixa || 0) + '.</p>');
-      t.push('PENDÊNCIAS: ' + ab.length + ' abertos (alta ' + (porP.alta || 0) + ', média ' + (porP.media || 0) + ', baixa ' + (porP.baixa || 0) + ')');
     }
 
-    csv.push(['data', 'canal', 'tipo', 'assunto', 'classificacao', 'status_acompanhamento', 'prioridade', 'autorizacao', 'texto_sem_dados_pessoais']);
+    csv.push(['data', 'canal', 'tipo', 'assunto', 'classificacao', 'objecoes', 'autorizacao', 'texto_sem_dados_pessoais']);
     lista.forEach(function (m) {
-      csv.push([U.fmtDataHora(m.data), CANAIS[m.canal], nomeTipo(m.tipo), nomeTema(m.tema), m.revisado ? 'revisada' : 'automática', m.acomp ? STATUS[m.acomp.status] : '', m.acomp ? PRIORIDADES[m.acomp.prioridade] : '', m.aut ? AUT[m.aut.status] : '', textoSeguro(m)]);
+      var objs = A.detectar(m.texto, S.objecoes).map(function (id) { return S.objecoes.find(function (o) { return o.id === id; }).nome; }).join(' | ');
+      csv.push([U.fmtDataHora(m.data), CANAIS[m.canal], nomeTipo(m.tipo), nomeTema(m.tema), m.revisado ? 'revisada' : 'automática', objs, m.aut ? AUT[m.aut.status] : '', textoSeguro(m)]);
     });
     return { html: h.join(''), texto: t.join('\n'), csv: csv };
   }
@@ -890,13 +876,13 @@
   function abaRelatorios() {
     var r = construirRelatorio();
     var sec = S.rel.secoes;
-    var h = '<div class="cabeca-aba"><h1>Relatórios</h1><p class="sub">Usa os filtros do topo. Nenhum relatório traz nome completo, sobrenome, telefone ou código de aluna.</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Relatórios</h1><p class="sub">Usa os filtros do topo. Nenhum relatório traz nome, sobrenome, telefone ou código de aluna.</p></div>';
     h += '<div class="linha-controles">' +
-      '<label class="campo campo-largo"><span>Tipo de relatório</span><select id="rel-tipo" data-mudar="rel-tipo">' + opcoes({ pauta: 'Pauta de conteúdo e necessidades', interno: 'Interno da equipe (números)', divulgacao: 'Divulgação (somente autorizados)' }, S.rel.tipo) + '</select></label>' +
+      '<label class="campo campo-largo"><span>Tipo de relatório</span><select id="rel-tipo" data-mudar="rel-tipo">' + opcoes({ pauta: 'Pauta de conteúdo e necessidades', interno: 'Interno em números', divulgacao: 'Divulgação (somente autorizados)' }, S.rel.tipo) + '</select></label>' +
       '<label class="check"><input type="checkbox" id="rel-rev" data-mudar="rel-rev"' + (S.rel.soRevisadas ? ' checked' : '') + '> Só classificações revisadas</label>' +
       '</div>';
     if (S.rel.tipo === 'interno') {
-      h += '<fieldset class="secoes"><legend>Seções</legend>' + [['numeros', 'Números'], ['temas', 'Assuntos'], ['queixas', 'Queixas e dificuldades'], ['depoimentos', 'Depoimentos e evolução'], ['pendencias', 'Pendências']].map(function (s) {
+      h += '<fieldset class="secoes"><legend>Seções</legend>' + [['numeros', 'Números'], ['temas', 'Assuntos'], ['dores', 'Queixas e dificuldades'], ['depoimentos', 'Depoimentos e evolução']].map(function (s) {
         return '<label class="check"><input type="checkbox" id="rs-' + s[0] + '" data-mudar="rel-secao" data-k="' + s[0] + '"' + (sec[s[0]] ? ' checked' : '') + '> ' + s[1] + '</label>';
       }).join('') + '</fieldset>';
     }
@@ -913,7 +899,7 @@
   /* ---------- Importar ---------- */
 
   function abaImportar() {
-    var h = '<div class="cabeca-aba"><h1>Importar conversas</h1><p class="sub">Primeira etapa, sem integração automática: você exporta a conversa no aplicativo e carrega o arquivo aqui. Tudo é lido no seu navegador, fica só nesta aba e não se mistura com os dados fictícios.</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Importar conversas</h1><p class="sub">Você exporta a conversa no aplicativo e carrega o arquivo aqui. Para WhatsApp, exporte as conversas que tiveram dúvidas, relatos ou depoimentos. Tudo é lido no seu navegador, fica só nesta aba e não se mistura com os dados fictícios.</p></div>';
     h += '<div class="duas"><section class="painel-card"><h2>Como exportar</h2>' +
       '<details open><summary><strong>WhatsApp</strong> (conversa individual ou grupo)</summary><ol class="passos"><li>Abra a conversa no celular.</li><li>Toque nos três pontinhos (Android) ou no nome do contato (iPhone).</li><li>Escolha <em>Mais → Exportar conversa → Sem mídia</em>.</li><li>Salve o arquivo .txt (se vier em .zip, extraia o .txt).</li></ol></details>' +
       '<details><summary><strong>Telegram</strong> (grupo de acompanhamento)</summary><ol class="passos"><li>Use o Telegram Desktop no computador.</li><li>Abra o grupo → três pontinhos → <em>Exportar histórico do chat</em>.</li><li>Desmarque fotos e vídeos e escolha o formato <em>JSON legível por máquina</em>.</li><li>Carregue aqui o arquivo result.json.</li></ol></details>' +
@@ -983,33 +969,37 @@
     fr.readAsText(file, 'utf-8');
   }
 
+  // Código estável por remetente sem guardar o nome ou o número de origem.
+  function chaveRemetente(s) {
+    var h = 5381, t = U.norm(s).trim();
+    for (var i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+    return 'r' + (h >>> 0).toString(36);
+  }
+
   function confirmarImportacao() {
     var p = S.impPrevia, c = S.dados.import;
-    var porNome = {};
-    Object.keys(c.alunas).forEach(function (id) { porNome[c.alunas[id].origem] = id; });
+    var porChave = {};
+    Object.keys(c.alunas).forEach(function (id) { porChave[c.alunas[id].chave] = id; });
     var novas = p.mensagens.map(function (x) {
       var eq = !!p.equipe[x.remetente];
       var alunaId = null;
       if (!eq) {
-        alunaId = porNome[x.remetente];
+        var k = chaveRemetente(x.remetente);
+        alunaId = porChave[k];
         if (!alunaId) {
           alunaId = 'I-' + String(Object.keys(c.alunas).length + 1).padStart(3, '0');
           var ehTel = /^[+\d\s().-]{8,}$/.test(x.remetente);
           var partes = ehTel ? [] : x.remetente.trim().split(/\s+/);
-          c.alunas[alunaId] = { id: alunaId, origem: x.remetente, nome: ehTel ? 'Contato sem nome' : partes[0], sobrenome: ehTel ? '' : partes.slice(1).join(' '), telefone: ehTel ? x.remetente : (x.telefone || '') };
-          porNome[x.remetente] = alunaId;
+          // Guardamos só o primeiro nome (para a equipe reconhecer) e o sobrenome em memória para mascarar textos.
+          c.alunas[alunaId] = { id: alunaId, chave: k, nome: ehTel ? 'Sem nome' : partes[0], sobrenome: ehTel ? '' : partes.slice(1).join(' ') };
+          porChave[k] = alunaId;
         }
       }
       var auto = C.classificar(x.texto, S.temas);
-      return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, autor: eq ? x.remetente : null, alunaId: alunaId, tipo: auto.tipo, tema: auto.tema, auto: auto, revisado: false, acomp: null, aut: null };
+      return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, alunaId: alunaId, tipo: eq ? 'outro' : auto.tipo, tema: auto.tema, auto: auto, revisado: eq, aut: null };
     });
-    // Respondida = existe mensagem da equipe depois dela no mesmo arquivo (estimativa automática).
-    var ultimaEquipe = 0;
-    novas.forEach(function (m) { if (m.equipe && m.data > ultimaEquipe) ultimaEquipe = m.data; });
     novas.forEach(function (m) {
-      if (m.equipe) return;
-      if (C.precisaAcompanhar(m.tipo)) m.acomp = { status: m.data < ultimaEquipe ? 'concluido' : 'pendente', prioridade: C.sugerirPrioridade(m.tipo, m.tema, m.texto), responsavel: '', sugerido: true };
-      if (m.tipo === 'depoimento' || m.tipo === 'evolucao') m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
+      if (!m.equipe && ehProva(m)) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
     });
     c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
     registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' mensagens');
@@ -1026,10 +1016,9 @@
 
   function abaConfig() {
     var adm = pode('admin');
-    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, equipe, permissões e registro de ações. Neste protótipo tudo fica só nesta aba.</p></div>';
-    h += '<section class="painel-card"><h2>Assuntos (categorias)</h2><p class="sub">Palavras-chave alimentam a classificação automática. Mudanças valem para novas classificações. Mensagens já revisadas por uma pessoa não são alteradas.</p>';
+    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, objeções, equipe, permissões e registro de ações. Neste protótipo tudo fica só nesta aba.</p></div>';
+    h += '<section class="painel-card"><h2>Assuntos</h2><p class="sub">As palavras-chave alimentam a classificação automática. O "tipo" decide se o assunto vira pauta de conteúdo, bloqueio de mentalidade, ajuste na entrega ou prova social. Mensagens já revisadas não são alteradas.</p>';
     if (!adm) h += semPermissao('editar assuntos');
-    var NATUREZAS = { conteudo: 'Vira conteúdo', mentalidade: 'Bloqueio de mentalidade', entrega: 'Ajuste na entrega', prova: 'Prova social' };
     h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Assunto</th><th>Tipo</th><th>Palavras-chave (separe por vírgula)</th><th>Ideia de conteúdo</th><th>Ângulo do seu método (ou ação, se for entrega)</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
       S.temas.map(function (t) {
         var dis = adm && !t.fixo ? '' : ' disabled';
@@ -1044,18 +1033,31 @@
       '<div class="campo campo-botao"><button type="button" class="btn" data-acao="reclassificar">Reclassificar mensagens não revisadas</button></div></div>';
     h += '</section>';
 
-    h += '<div class="duas"><section class="painel-card"><h2>Equipe</h2><p class="sub">Nomes usados em "responsável" e em "quem confirmou a autorização".</p><ul class="equipe">' +
+    h += '<section class="painel-card"><h2>Objeções</h2><p class="sub">Crenças que travam a aluna. O painel procura as palavras-chave nas mensagens. "Como quebrar" é a resposta do seu método e aparece na pauta.</p>';
+    if (!adm) h += semPermissao('editar objeções');
+    h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Objeção</th><th>Palavras-chave</th><th>Como quebrar (seu método)</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
+      S.objecoes.map(function (o) {
+        var dis = adm ? '' : ' disabled';
+        return '<tr><td><input type="text" id="on-' + o.id + '" value="' + esc(o.nome) + '" aria-label="Objeção"' + dis + '></td>' +
+          '<td><textarea id="op-' + o.id + '" rows="2" aria-label="Palavras-chave da objeção"' + dis + '>' + esc(o.palavras.join(', ')) + '</textarea></td>' +
+          '<td><textarea id="oq-' + o.id + '" rows="2" aria-label="Como quebrar"' + dis + '>' + esc(o.quebra) + '</textarea></td>' +
+          (adm ? '<td class="acoes-celula"><button type="button" class="btn btn-sec btn-peq" data-acao="obj-salvar" data-id="' + o.id + '">Salvar</button><button type="button" class="btn btn-sec btn-peq" data-acao="obj-remover" data-id="' + o.id + '">Remover</button></td>' : '') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+    if (adm) h += '<div class="linha-controles"><label class="campo campo-largo"><span>Nova objeção</span><input type="text" id="obj-nova" placeholder="Ex.: Depois dos 40 não dá mais"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="obj-adicionar">Adicionar</button></div></div>';
+    h += '</section>';
+
+    h += '<div class="duas"><section class="painel-card"><h2>Equipe</h2><p class="sub">Nomes usados em "quem confirmou a autorização". Ao importar, marque essas pessoas como equipe.</p><ul class="equipe">' +
       S.equipe.map(function (n, i) { return '<li>' + esc(n) + (adm && S.equipe.length > 1 ? ' <button type="button" class="link" data-acao="equipe-remover" data-i="' + i + '">remover</button>' : '') + '</li>'; }).join('') + '</ul>' +
       (adm ? '<div class="linha-controles"><label class="campo"><span>Nome</span><input type="text" id="equipe-novo"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="equipe-adicionar">Adicionar</button></div></div>' : semPermissao('editar a equipe')) +
       '</section>';
-    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">Simulação. Na versão com servidor, isso é garantido pelo login e pelas regras do banco de dados.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver contato</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
+    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">Simulação. Na versão com servidor, isso é garantido pelo login e pelas regras do banco de dados. O painel não guarda telefone nem contato de ninguém.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver primeiro nome</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
       Object.keys(PAPEIS).map(function (k) {
         var p = PAPEIS[k];
         function c(v) { return v ? '<span class="sim">Sim</span>' : '<span class="nao">Não</span>'; }
-        return '<tr' + (k === S.papel ? ' class="atual"' : '') + '><th>' + esc(p.nome) + '</th><td>' + c(true) + '</td><td>' + c(p.editar) + '</td><td>' + c(p.contato) + '</td><td>' + c(p.exportar) + '</td><td>' + c(p.admin) + '</td></tr>';
+        return '<tr' + (k === S.papel ? ' class="atual"' : '') + '><th>' + esc(p.nome) + '</th><td>' + c(true) + '</td><td>' + c(p.editar) + '</td><td>' + c(p.nome1) + '</td><td>' + c(p.exportar) + '</td><td>' + c(p.admin) + '</td></tr>';
       }).join('') + '</tbody></table></div></section></div>';
 
-    h += '<section class="painel-card"><h2>Registro de ações</h2><p class="sub">Mudanças de status, classificação, autorizações, exportações e acessos ao contato. Neste protótipo some ao recarregar. Na versão real fica guardado no servidor.</p>' +
+    h += '<section class="painel-card"><h2>Registro de ações</h2><p class="sub">Classificações, autorizações, cópias tratadas, importações e exportações. Neste protótipo some ao recarregar. Na versão real fica guardado no servidor.</p>' +
       (!adm ? semPermissao('ver o registro de ações') : S.auditoria.length ? '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Quando</th><th>Função</th><th>Dados</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>' +
         S.auditoria.slice(0, 200).map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(a.quando) + '</td><td>' + esc(a.papel) + '</td><td>' + esc(a.modo) + '</td><td>' + esc(a.acao) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">Nenhuma ação registrada ainda.</p>') +
       '</section>';
@@ -1069,22 +1071,14 @@
 
   var ACOES = {
     aba: function (b) { S.aba = b.dataset.v; S.limite = 40; render(); document.getElementById('conteudo').focus({ preventScroll: true }); window.scrollTo(0, 0); },
-    modo: function (b) { if (S.modo === b.dataset.v) { render(); return; } S.modo = b.dataset.v; S.limite = 40; S.contatos = {}; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render(); },
-    'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '', status: '' }; render(); },
+    modo: function (b) { if (S.modo === b.dataset.v) { render(); return; } S.modo = b.dataset.v; S.limite = 40; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render(); },
+    'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '' }; render(); },
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
-    'ir-pauta': function () { S.aba = 'relatorios'; S.rel.tipo = 'pauta'; render(); window.scrollTo(0, 0); },
-    'ir-pauta-conteudos': function () { S.aba = 'conteudos'; S.sub = 'ideias'; render(); window.scrollTo(0, 0); },
     'ir-revisao': function () { S.aba = 'mensagens'; S.soNaoRevisadas = true; render(); },
+    'ir-pauta': function () { S.aba = 'relatorios'; S.rel.tipo = 'pauta'; render(); window.scrollTo(0, 0); },
     gran: function (b) { S.gran = b.dataset.v; render(); },
     mais: function () { S.limite += 40; if (S.aba === 'mensagens') renderListaMensagens(); else render(); },
-    sub: function (b) { S.sub = b.dataset.v; S.limite = 40; render(); },
-    'ver-contato': function (b) {
-      if (!pode('contato')) return;
-      var id = b.dataset.id;
-      S.contatos[id] = !S.contatos[id];
-      if (S.contatos[id]) { var m = acharMsg(id); registrar('Visualizou contato', 'Aluna ' + m.alunaId); }
-      render();
-    },
+    sub: function (b) { S[b.dataset.k] = b.dataset.v; S.limite = 40; render(); },
     'confirmar-class': function (b) {
       if (!pode('editar')) return;
       var m = acharMsg(b.dataset.id);
@@ -1092,11 +1086,8 @@
       var mudou = tipo !== m.tipo || tema !== m.tema;
       registrar(mudou ? 'Corrigiu classificação' : 'Confirmou classificação', 'Msg ' + m.id + ': ' + nomeTipo(m.tipo) + ' / ' + nomeTema(m.tema) + (mudou ? ' → ' + nomeTipo(tipo) + ' / ' + nomeTema(tema) : ''));
       m.tipo = tipo; m.tema = tema; m.revisado = true;
-      if (C.precisaAcompanhar(tipo) && !m.acomp) m.acomp = { status: 'pendente', prioridade: C.sugerirPrioridade(tipo, tema, m.texto), responsavel: '', sugerido: true };
-      if (!C.precisaAcompanhar(tipo) && m.acomp && m.acomp.status === 'pendente') m.acomp = null;
-      if ((tipo === 'depoimento' || tipo === 'evolucao') && !m.aut) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
+      if (ehProva(m) && !m.aut) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
       avisar('Classificação salva como revisada.');
-      renderMoldura();
       renderListaMensagens();
     },
     'registrar-aut': function (b) {
@@ -1160,7 +1151,7 @@
     'rel-html': function () {
       if (!pode('exportar')) return;
       var r = construirRelatorio();
-      var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório</title><style>body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;color:#1f1a1d}h2,h3{line-height:1.2}table{border-collapse:collapse;width:100%;margin:.5rem 0 1rem}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left}.rel-demo{background:#fff1c2;border:2px dashed #8a6500;padding:.5rem;font-weight:700;text-align:center}.rel-meta{color:#5b5157;font-size:.9em}q{font-style:italic}</style></head><body>' + r.html + '</body></html>';
+      var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Relatório</title><style>body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#1f1a1d}h2,h3{line-height:1.2}h3{margin-top:1.8rem;color:#8a1d4d}table{border-collapse:collapse;width:100%;margin:.5rem 0 1rem}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.rel-demo{background:#fff1c2;border:2px dashed #8a6500;padding:.5rem;font-weight:700;text-align:center}.rel-meta,.rel-lista span{color:#5b5157;font-size:.9em}.pauta>li{margin-bottom:1rem}.pauta-campos div{display:grid;grid-template-columns:11rem 1fr;gap:.6rem}.pauta-campos dt{color:#6c5f66;font-size:.85em}.pauta-campos dd{margin:0}.objecao{border-left:2px solid #a3245c;padding-left:.8rem;margin:.8rem 0}.objecao p{margin:.2rem 0}.objecao-nome{font-weight:700}.rel-lista li{margin-bottom:.5rem}</style></head><body>' + r.html + '</body></html>';
       registrar('Exportou relatório (.html)', S.rel.tipo);
       U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'relatorio-' + U.chaveDia(Date.now()) + '.html', doc, 'text/html');
       render();
@@ -1181,7 +1172,7 @@
       var dia = S.diaResumo ? U.deChave(S.diaResumo) : U.inicioDia(refFim());
       var r = calcularResumo(dia);
       var txt = (S.modo === 'demo' ? '*** DADOS FICTÍCIOS ***\n' : '') + 'Resumo do dia ' + U.fmtDataAno(dia) + '\n\n' + r.destaques.map(function (d) { return '• ' + textoPlano(d); }).join('\n') +
-        (r.atencao.length ? '\n\nPrecisa de atenção:\n' + r.atencao.map(function (d) { return '• ' + textoPlano(d); }).join('\n') : '');
+        (r.atencao.length ? '\n\nPede atenção:\n' + r.atencao.map(function (d) { return '• ' + textoPlano(d); }).join('\n') : '');
       U.copiar(txt, function () { registrar('Copiou resumo do dia', U.fmtDataAno(dia)); avisar('Resumo copiado.'); }, function () { avisar('Não foi possível copiar automaticamente neste navegador.'); });
     },
     'modelo-csv': function () { U.baixar('modelo-importacao.csv', P.importadores.MODELO_CSV, 'text/csv'); },
@@ -1192,7 +1183,6 @@
     'imp-limpar': function () {
       S.dados.import = { alunas: {}, mensagens: [], midias: [] };
       S.confirmarLimpeza = false;
-      S.contatos = {};
       registrar('Apagou dados importados', 'Memória da aba');
       avisar('Dados importados apagados desta aba.');
       render();
@@ -1229,6 +1219,32 @@
       registrar('Criou assunto', nome);
       render();
     },
+    'obj-salvar': function (b) {
+      if (!pode('admin')) return;
+      var o = S.objecoes.find(function (x) { return x.id === b.dataset.id; });
+      o.nome = document.getElementById('on-' + o.id).value.trim() || o.nome;
+      o.palavras = document.getElementById('op-' + o.id).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      o.quebra = document.getElementById('oq-' + o.id).value.trim();
+      registrar('Editou objeção', o.nome);
+      avisar('Objeção salva.');
+      render();
+    },
+    'obj-remover': function (b) {
+      if (!pode('admin')) return;
+      var o = S.objecoes.find(function (x) { return x.id === b.dataset.id; });
+      S.objecoes = S.objecoes.filter(function (x) { return x.id !== o.id; });
+      registrar('Removeu objeção', o.nome);
+      render();
+    },
+    'obj-adicionar': function () {
+      if (!pode('admin')) return;
+      var nome = document.getElementById('obj-nova').value.trim();
+      if (!nome) return;
+      S.objecoes.push({ id: 'obj-' + Date.now().toString(36), nome: nome, palavras: [], temas: [], quebra: '' });
+      registrar('Criou objeção', nome);
+      avisar('Objeção criada. Agora preencha as palavras-chave e clique em Salvar.');
+      render();
+    },
     reclassificar: function () {
       if (!pode('admin')) return;
       var n = 0;
@@ -1259,17 +1275,7 @@
 
   var MUDANCAS = {
     filtro: function (el) { S.filtros[el.dataset.k] = el.value; S.limite = 40; render(); },
-    papel: function (el) { S.papel = el.value; S.contatos = {}; registrar('Trocou função (simulação)', PAPEIS[S.papel].nome); render(); },
-    'fila-filtro': function (el) { S.fila[el.dataset.k] = el.value; render(); },
-    'fila-campo': function (el) {
-      if (!pode('editar')) return;
-      var m = acharMsg(el.dataset.id), campo = el.dataset.campo, antes = m.acomp[campo];
-      m.acomp[campo] = el.value;
-      if (campo === 'prioridade') m.acomp.sugerido = false;
-      var nomes = { status: STATUS, prioridade: PRIORIDADES }[campo];
-      registrar('Alterou ' + (campo === 'responsavel' ? 'responsável' : campo), 'Msg ' + m.id + ': ' + (nomes ? nomes[antes] : antes || 'ninguém') + ' → ' + (nomes ? nomes[el.value] : el.value || 'ninguém'));
-      render();
-    },
+    papel: function (el) { S.papel = el.value; registrar('Trocou função (simulação)', PAPEIS[S.papel].nome); render(); },
     'so-nao-rev': function (el) { S.soNaoRevisadas = el.checked; S.limite = 40; renderListaMensagens(); },
     'dia-resumo': function (el) { S.diaResumo = el.value; render(); },
     'rel-tipo': function (el) { S.rel.tipo = el.value; render(); },
@@ -1312,6 +1318,6 @@
   /* ---------- início ---------- */
 
   S.dados.demo = P.demo.gerar(S.temas, S.equipe);
-  if (/^#(visao|resumo|fila|mensagens|conteudos|fotos|relatorios|importar|config)$/.test(location.hash)) S.aba = location.hash.slice(1);
+  if (/^#(visao|resumo|dores|resultados|ideias|ajuda|mensagens|relatorios|importar|config)$/.test(location.hash)) S.aba = location.hash.slice(1);
   render();
 })(window.Painel);

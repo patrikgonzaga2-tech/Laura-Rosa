@@ -1,7 +1,9 @@
 /*
  * Minimização de dados pessoais.
- * - Visões analíticas e relatórios: código da aluna, sem nome completo, sem telefone.
- * - Área restrita (fila, com permissão): primeiro nome; contato só sob demanda.
+ * - O painel não guarda telefone nem contato: ele organiza, não responde.
+ * - Visões analíticas e relatórios: código da aluna, sem nome e sem sobrenome.
+ * - Com permissão de edição: primeiro nome + código, para reconhecer quem é.
+ * - Telefones, e-mails, @ e documentos citados no texto são mascarados.
  */
 window.Painel = window.Painel || {};
 (function (P) {

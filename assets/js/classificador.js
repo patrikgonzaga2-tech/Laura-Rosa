@@ -88,26 +88,11 @@ window.Painel = window.Painel || {};
     };
   }
 
-  // Sugestão de prioridade para a fila (também revisável).
-  function sugerirPrioridade(tipo, tema, texto) {
-    var t = norm(texto);
-    if (tipo === 'queixa') return 'alta';
-    if (/desistir|cancelar|reembolso|parar tudo/.test(t)) return 'alta';
-    if (tipo === 'dificuldade' && (tema === 'motivacao' || tema === 'constancia')) return 'alta';
-    if (tipo === 'dificuldade' || tipo === 'duvida') return 'media';
-    return 'baixa';
-  }
-
-  function precisaAcompanhar(tipo) {
-    return tipo === 'duvida' || tipo === 'queixa' || tipo === 'dificuldade';
-  }
-
   P.classificador = {
     TIPOS: TIPOS,
     temasPadrao: temasPadrao,
     temasRelacionados: temasRelacionados,
     classificar: classificar,
-    sugerirPrioridade: sugerirPrioridade,
-    precisaAcompanhar: precisaAcompanhar
+    pontuar: pontuar
   };
 })(window.Painel);
