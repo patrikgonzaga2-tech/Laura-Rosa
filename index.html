@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acompanhamento das Alunas</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="assets/css/painel.css">
+</head>
+<body>
+<a class="pular" href="#conteudo">Pular para o conteúdo</a>
+<header class="topo">
+  <div class="marca">
+    <span class="marca-titulo">Acompanhamento das Alunas</span>
+    <span class="marca-sub">WhatsApp de suporte · Grupo do Telegram</span>
+  </div>
+  <div class="topo-controles">
+    <div class="seg" role="group" aria-label="Fonte dos dados">
+      <button type="button" data-acao="modo" data-v="demo" aria-pressed="true">Exemplo fictício</button>
+      <button type="button" data-acao="modo" data-v="import" aria-pressed="false">Importados</button>
+    </div>
+    <label class="papel"><span>Ver como</span>
+      <select id="papel" data-mudar="papel">
+        <option value="leitura">Leitura</option>
+        <option value="edicao">Suporte (edição)</option>
+        <option value="exportacao">Exportação</option>
+        <option value="admin" selected>Administração</option>
+      </select>
+    </label>
+  </div>
+</header>
+<div id="faixa" class="faixa faixa-demo" role="note"></div>
+<div class="casca">
+  <nav id="nav" class="nav" aria-label="Seções do painel"></nav>
+  <main id="conteudo" class="principal" tabindex="-1">
+    <div id="filtros"></div>
+    <div id="aba"></div>
+  </main>
+</div>
+<div id="modal" class="modal" hidden></div>
+<div id="aviso" class="aviso" role="status" aria-live="polite" hidden></div>
+<noscript><p class="faixa">Este painel precisa de JavaScript ativado no navegador.</p></noscript>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/classificador.js"></script>
+<script src="assets/js/privacidade.js"></script>
+<script src="assets/js/importadores.js"></script>
+<script src="assets/js/dados-demo.js"></script>
+<script src="assets/js/grafico.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

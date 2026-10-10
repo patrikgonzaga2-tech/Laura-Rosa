@@ -1,0 +1,13 @@
+# Dados reais nunca entram no repositório
+dados-reais/
+importacoes/
+*.zip
+result.json
+Conversa do WhatsApp com *.txt
+WhatsApp Chat with *.txt
+*.env
+.env*
+
+# Sistema
+.DS_Store
+Thumbs.db
