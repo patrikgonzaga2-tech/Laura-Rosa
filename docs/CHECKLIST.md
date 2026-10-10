@@ -21,10 +21,10 @@ Vamos preencher um item por vez. ✅ = já respondido.
 - [ ] As alunas serão avisadas de que as mensagens são organizadas pela equipe?
 
 ## Drive
-- [ ] Confirmar que é Google Drive e em qual conta
-- [ ] Quem administra a conta
-- [ ] Aprovação da estrutura de pastas proposta
-- [ ] Quem terá acesso a cada pasta (nada público)
+- [x] ✅ Google Drive, pasta CORPO FELIZ
+- [x] ✅ Estrutura criada em CORPO FELIZ/Painel de acompanhamento (10/10/2026)
+- [ ] E-mails de quem usa as pastas (social media e equipe), para trocar o acesso de "qualquer pessoa com o link" para "Restrito"
+- [ ] Depois de restringir: mover as fotos da pasta "ANTES E DEPOIS" para "Importações originais"
 
 ## Fotos e prints para o Instagram
 - [x] ✅ Prints aprovados por você e enviados ao Drive da social media

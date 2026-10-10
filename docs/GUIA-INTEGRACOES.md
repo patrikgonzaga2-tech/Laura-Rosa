@@ -62,7 +62,7 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 - Só sobe prints **aprovados**.
 - Se a autorização de uma aluna for retirada, o painel avisa para remover o arquivo da pasta.
 
-**Estrutura proposta (sujeita à sua aprovação):**
+**Estrutura criada em 10/10/2026 dentro de `CORPO FELIZ` (com um documento LEIA-ME de regras):**
 ```
 Painel de acompanhamento/
   Importações originais/          (só a equipe)
@@ -71,8 +71,9 @@ Painel de acompanhamento/
     Instagram/AAAA-MM/            (compartilhada só com o e-mail da social media)
   Relatórios/                     (só a equipe)
 ```
-- Nenhuma pasta ou arquivo com link público. O compartilhamento é por e-mail, pessoa a pessoa.
-- Nada é enviado ao Drive antes de você confirmar a estrutura, as permissões e as regras de autorização.
+- **Situação atual:** a pasta CORPO FELIZ está com "qualquer pessoa com o link pode editar", e a estrutura herda esse acesso. A decisão foi manter assim até ter os e-mails de quem usa.
+- **Enquanto o link estiver aberto:** "Importações originais" e "Cópias tratadas para revisão" ficam vazias. Só entram prints aprovados (em Materiais autorizados) e relatórios sem dados pessoais.
+- **Próximo passo:** com os e-mails em mãos, trocar para "Restrito" e compartilhar pessoa a pessoa. A social media fica só com "Materiais autorizados".
 
 ## Etapa D: hospedagem e login
 Veja `docs/ARQUITETURA.md`. Inclui:
