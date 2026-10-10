@@ -97,10 +97,11 @@ window.Painel = window.Painel || {};
   // Suas mensagens no grupo que mais geraram respostas (até 3 h depois ou até a sua próxima mensagem).
   function interacao(todas, iv) {
     var msgs = todas.filter(function (m) { return m.canal === 'telegram'; }).sort(function (a, b) { return a.data - b.data; });
-    var equipe = msgs.filter(function (m) { return m.equipe && m.data >= iv[0] && m.data <= iv[1]; });
+    // Só as mensagens que você puxou no grupo (respostas a uma aluna não contam como post).
+    var equipe = msgs.filter(function (m) { return m.equipe && !m.respondeA && m.data >= iv[0] && m.data <= iv[1]; });
     var porTexto = {};
     equipe.forEach(function (p) {
-      var prox = msgs.find(function (m) { return m.equipe && m.data > p.data; });
+      var prox = msgs.find(function (m) { return m.equipe && !m.respondeA && m.data > p.data; });
       var fim = Math.min(p.data + 3 * 3600000, prox ? prox.data : Infinity);
       var resp = msgs.filter(function (m) { return !m.equipe && m.data > p.data && m.data <= fim; }).length;
       var k = U.norm(p.texto).trim();

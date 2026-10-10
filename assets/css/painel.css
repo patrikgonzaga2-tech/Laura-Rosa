@@ -347,6 +347,43 @@ blockquote.depo { margin: 0; padding-left: 12px; border-left: 2px solid var(--ac
 .chip-obj { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
 .sug .chip { align-self: flex-start; }
 
+/* Conversas do dia */
+.assunto-dia { background: var(--accent-soft); border-radius: var(--raio); padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
+.assunto-nome { font-family: var(--f-display); font-size: 1.5rem; font-weight: 700; color: var(--accent-ink); line-height: 1.2; }
+.qa .resposta { border-left: 2px solid var(--tg); background: var(--surface-2); border-radius: 0 8px 8px 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.resp-rot { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.qa .resposta p { overflow-wrap: anywhere; }
+.sem-resp { font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.resp-rel { color: var(--fg); }
+
+/* Fotos e prints */
+.foto-lados { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; padding: 10px; background: var(--surface-2); }
+.foto-lado { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.foto-lado img { width: 100%; aspect-ratio: 3 / 4; max-width: 100%; object-fit: cover; border-radius: 6px; display: block; }
+.foto-lado .trava-img { aspect-ratio: 3 / 4; max-width: 100%; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 6px; }
+.foto-lado figcaption { font-size: 0.78rem; color: var(--muted); }
+.fluxo { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; counter-reset: passo; }
+.fluxo li { counter-increment: passo; background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; font-size: 0.86rem; }
+.fluxo li::before { content: counter(passo); font-family: var(--f-display); font-weight: 700; color: var(--accent-ink); font-size: 1.2rem; }
+.fluxo span { color: var(--muted); }
+.prontos { display: flex; flex-direction: column; gap: 8px; }
+.pronto { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.pronto > span:nth-child(2) { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.prints { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.print-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); overflow: hidden; display: flex; flex-direction: column; }
+.print-invalido { border-color: var(--crit); }
+.print-img { display: block; width: 100%; max-width: 100%; padding: 0; border: 0; background: var(--surface-2); cursor: zoom-in; }
+.print-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.st-print { font-size: 0.74rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.st-aguardando { background: var(--warn-soft); color: var(--warn-ink); }
+.st-ajuste { background: var(--crit-soft); color: var(--crit); }
+.st-aprovado { background: var(--good-soft); color: var(--good); }
+.nota-input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); min-width: 0; flex: 1 1 140px; }
+.compositor { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.cp-controles { display: flex; flex-direction: column; gap: 10px; }
+.cp-previa img { max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; border: 1px solid var(--line); border-radius: 8px; }
+.modal-ver img { max-width: 100%; max-height: 80vh; display: block; margin: 0 auto; }
+
 /* Importar */
 .passos { margin: 6px 0 4px; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 4px; }
 details summary { cursor: pointer; }
@@ -415,7 +452,8 @@ details summary { cursor: pointer; }
   .item-topo time { margin-left: 0; flex-basis: 100%; }
   .item-acoes .campo, .form-aut .campo, .linha-controles .campo { flex: 1 1 100%; }
   .restrito dl div, .pauta-campos div { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .grupos, .galeria { grid-template-columns: minmax(0, 1fr); }
+  .grupos, .galeria, .prints { grid-template-columns: minmax(0, 1fr); }
+  .compositor { grid-template-columns: minmax(0, 1fr); }
   .topo-controles { width: 100%; justify-content: space-between; }
 }
 @media (prefers-reduced-motion: reduce) {

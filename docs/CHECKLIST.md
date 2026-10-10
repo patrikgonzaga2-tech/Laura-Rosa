@@ -21,13 +21,16 @@ Vamos preencher um item por vez. ✅ = já respondido.
 - [ ] As alunas serão avisadas de que as mensagens são organizadas pela equipe?
 
 ## Drive
-- [ ] Qual serviço (Google Drive ou outro)
+- [ ] Confirmar que é Google Drive e em qual conta
 - [ ] Quem administra a conta
 - [ ] Aprovação da estrutura de pastas proposta
 - [ ] Quem terá acesso a cada pasta (nada público)
 
-## Fotos e "formato print"
-- [ ] Dimensões e formatos desejados (ex.: 1080×1350 feed, 1080×1920 stories, 1080×1080 quadrado)
+## Fotos e prints para o Instagram
+- [x] ✅ Prints aprovados por você e enviados ao Drive da social media
+- [ ] Confirmar formatos (o protótipo usa 1080×1350 feed, 1080×1920 stories e 1080×1080 quadrado)
+- [ ] @ do perfil e cores que devem aparecer nos prints
+- [ ] E-mail da social media (para compartilhar só a pasta de materiais autorizados)
 - [ ] Regra para o rosto: sempre ocultar, ou mostrar só com autorização específica
 - [ ] Modelo de termo de autorização (imagem, depoimento, resultados)
 

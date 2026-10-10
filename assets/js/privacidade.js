@@ -37,7 +37,18 @@ window.Painel = window.Painel || {};
     return t;
   }
 
+  // Para textos da equipe em relatórios: também troca nomes de alunas citados ("Bom dia, Bianca!").
+  function mascararNomes(texto, alunas) {
+    var nomes = {};
+    Object.keys(alunas || {}).forEach(function (id) {
+      var n = String(alunas[id].nome || '').split(/\s+/)[0];
+      if (n.length >= 3) nomes[norm(n)] = true;
+    });
+    var t = mascararTexto(texto, alunas);
+    return t.replace(/[\p{L}'’-]+/gu, function (p) { return nomes[norm(p)] ? '[nome]' : p; });
+  }
+
   function primeiroNome(a) { return a ? String(a.nome || '').split(/\s+/)[0] : ''; }
 
-  P.privacidade = { mascararTexto: mascararTexto, primeiroNome: primeiroNome };
+  P.privacidade = { mascararTexto: mascararTexto, mascararNomes: mascararNomes, primeiroNome: primeiroNome };
 })(window.Painel);

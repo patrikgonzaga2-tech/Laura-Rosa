@@ -48,16 +48,29 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 - Áudios não viram texto.
 - Fotos de antes e depois entram pela aba "Antes e depois e resultados", só com autorização.
 
-## Etapa C: Google Drive
-- **Como funciona:** usa a API oficial do Google Drive com login OAuth. A permissão pedida é restrita (`drive.file`), então o painel só enxerga os arquivos e pastas que ele mesmo criou.
-- **Estrutura proposta, sujeita à sua aprovação:**
-  ```
-  Painel de acompanhamento/
-    Importações originais/
-    Materiais autorizados/
-    Cópias tratadas para revisão/
-    Relatórios/
-  ```
+## Etapa C: Google Drive (destino dos prints aprovados)
+**Fluxo:**
+1. Foto ou depoimento com autorização para divulgação registrada.
+2. O print é montado no painel.
+3. Você aprova.
+4. O print vai para a pasta da social media.
+
+**Hoje, no protótipo:** o botão "Baixar pacote dos aprovados (.zip)" gera a pasta `Instagram/AAAA-MM/` com os PNGs e um `LEIA-ME.txt` sem dados pessoais. Você arrasta essa pasta para o Drive.
+
+**Na versão com servidor:** o botão "Enviar ao Drive" usa a API oficial do Google Drive com login OAuth.
+- A permissão pedida é restrita (`drive.file`): o painel só enxerga as pastas que ele mesmo criou.
+- Só sobe prints **aprovados**.
+- Se a autorização de uma aluna for retirada, o painel avisa para remover o arquivo da pasta.
+
+**Estrutura proposta (sujeita à sua aprovação):**
+```
+Painel de acompanhamento/
+  Importações originais/          (só a equipe)
+  Cópias tratadas para revisão/   (só a equipe)
+  Materiais autorizados/
+    Instagram/AAAA-MM/            (compartilhada só com o e-mail da social media)
+  Relatórios/                     (só a equipe)
+```
 - Nenhuma pasta ou arquivo com link público. O compartilhamento é por e-mail, pessoa a pessoa.
 - Nada é enviado ao Drive antes de você confirmar a estrutura, as permissões e as regras de autorização.
 

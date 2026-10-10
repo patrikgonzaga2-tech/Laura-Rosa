@@ -75,7 +75,7 @@ window.Painel = window.Painel || {};
       if (!t) { if (x.photo || x.file || x.media_type) midias++; else ignoradas++; return; }
       var data = new Date(x.date).getTime();
       if (isNaN(data)) { ignoradas++; return; }
-      msgs.push({ data: data, remetente: x.from || 'Sem nome', texto: t, canal: 'telegram' });
+      msgs.push({ data: data, remetente: x.from || 'Sem nome', texto: t, canal: 'telegram', idOrigem: x.id, respondeOrigem: x.reply_to_message_id || null });
     });
     if (!msgs.length) throw new Error('Não encontrei mensagens de texto nesse arquivo do Telegram.');
     return { mensagens: msgs, midias: midias, ignoradas: ignoradas, chat: dados.name || '' };

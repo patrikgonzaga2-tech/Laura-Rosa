@@ -80,6 +80,13 @@ window.Painel = window.Painel || {};
     var h = [], t = [], csv = [];
     function secao(titulo, nota) { h.push('<h3>' + esc(titulo) + '</h3>' + (nota ? '<p class="rel-meta">' + esc(nota) + '</p>' : '')); t.push(titulo.toUpperCase()); }
     function fimSecao() { t.push(''); }
+    // A resposta mais recente da equipe dentro de um grupo de mensagens parecidas.
+    function respostaDoGrupo(g) {
+      if (!ctx.respostaDe) return null;
+      var r = null;
+      g.itens.forEach(function (m) { var x = ctx.respostaDe(m); if (x && (!r || x.data > r.data)) r = x; });
+      return r;
+    }
 
     // Provas ligadas a cada assunto.
     var provasPorTema = {};
@@ -136,6 +143,7 @@ window.Painel = window.Painel || {};
         '<div><dt>Ideia e formato</dt><dd>' + esc(tm.ideia || 'Defina em Configurações') + '</dd></div>' +
         '<div><dt>Ângulo do seu método</dt><dd>' + esc(tm.angulo || 'Defina em Configurações') + '</dd></div>' +
         '<div><dt>Gancho (do jeito que elas falam)</dt><dd>' + (g ? citar(g.principal) + ' <span class="rel-meta">· ' + g.itens.length + ' vez(es)</span>' : '—') + '</dd></div>' +
+        (function () { var rr = g && respostaDoGrupo(g); return rr ? '<div><dt>Sua resposta (reaproveite)</dt><dd>' + citar(ctx.textoEquipe(rr)) + '</dd></div>' : ''; })() +
         '<div><dt>Prova social</dt><dd>' + (pv.prontas.length ? pv.prontas.length + ' relato(s) autorizado(s) sobre esse assunto' : 'Nenhum relato autorizado ainda') + (pv.aguardando ? ' · ' + pv.aguardando + ' aguardando autorização' : '') + '</dd></div>' +
         '</dl></li>';
     }).join('') + '</ol>');
@@ -180,11 +188,13 @@ window.Painel = window.Painel || {};
 
     // ---- 6. Perguntas que mais se repetem
     var faq = grupos.filter(function (g) { return g.itens.some(function (m) { return m.tipo === 'duvida'; }); }).slice(0, 8);
-    secao('Perguntas que mais se repetem', 'Mensagens parecidas foram agrupadas. Viram material fixo no grupo e pauta de conteúdo.');
+    secao('Perguntas que mais se repetem', 'Mensagens parecidas agrupadas, com a resposta que você já deu. Sua resposta é rascunho pronto de post ou de material fixo.');
     h.push('<ol class="rel-lista">' + faq.map(function (g) {
-      t.push('- (' + g.itens.length + 'x) "' + g.principal + '" [' + tema(g.tema).nome + ']');
+      var rr = respostaDoGrupo(g);
+      t.push('- (' + g.itens.length + 'x) "' + g.principal + '" [' + tema(g.tema).nome + ']' + (rr ? ' | Sua resposta: "' + ctx.textoEquipe(rr) + '"' : ''));
       return '<li>' + citar(g.principal) + ' <span>(' + g.itens.length + 'x · ' + esc(tema(g.tema).nome) + ')</span>' +
-        (g.variacoes.length ? '<br><span>Também escrevem: ' + g.variacoes.map(citar).join(' · ') + '</span>' : '') + '</li>';
+        (g.variacoes.length ? '<br><span>Também escrevem: ' + g.variacoes.map(citar).join(' · ') + '</span>' : '') +
+        (rr ? '<br><span class="resp-rel">Sua resposta: ' + citar(ctx.textoEquipe(rr)) + '</span>' : '<br><span>Sem resposta registrada nos arquivos.</span>') + '</li>';
     }).join('') + '</ol>');
     fimSecao();
 

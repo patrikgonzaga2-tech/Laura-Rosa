@@ -1,6 +1,12 @@
 # Painel de Acompanhamento das Alunas
 
-Painel que junta e organiza o que as alunas trazem no WhatsApp de suporte e no grupo do Telegram: dores, objeções, dúvidas que se repetem, relatos de evolução, depoimentos, antes e depois e a interação no grupo. A partir disso, gera ideias de conteúdo, ideias de antes e depois e sugestões de como ajudar mais. Ele não serve para responder alunas e não guarda telefone ou contato.
+Painel que organiza as conversas que já acontecem no WhatsApp de suporte e no grupo do Telegram. Ele não serve para conversar com as alunas e não guarda telefone ou contato.
+
+- **Conversas do dia:** o assunto do dia, quem perguntou o quê e o que a equipe respondeu.
+- **Dores e objeções:** o que trava as alunas, nas palavras delas, e como quebrar com o seu método.
+- **Antes e depois e resultados:** relatos, depoimentos e fotos, com registro de autorização e ideias de antes e depois.
+- **Prints para o Instagram:** monta o print (antes e depois, card de depoimento ou print de conversa) só com material autorizado. Você aprova, e os aprovados vão em um pacote para o Drive da social media.
+- **Ideias de conteúdo e Como ajudar mais:** pauta com o ângulo do seu método, a resposta que você já deu e sugestões para cuidar melhor das alunas.
 
 O relatório principal é a **Pauta de conteúdo e necessidades das alunas**. Ela transforma as mensagens em pauta para o Instagram (com o ângulo do seu método), perguntas que se repetem, bloqueios de mentalidade, provas sociais autorizadas e melhorias na entrega. Veja um exemplo com dados fictícios em `exemplos/relatorio-pauta-ficticio.html`.
 
@@ -23,7 +29,8 @@ Não precisa instalar nada. As fontes vêm do Google Fonts quando há internet. 
 |---|---|
 | `index.html` | Página do painel |
 | `assets/css/painel.css` | Visual (claro e escuro, computador e celular) |
-| `assets/js/` | Lógica: classificação, análises (`analise.js`), pauta (`pauta.js`), privacidade, importação, gráfico e telas |
+| `assets/js/` | Lógica: classificação, análises (`analise.js`), pauta (`pauta.js`), montagem de prints (`prints.js`), privacidade, importação, gráfico e telas |
+| `assets/vendor/` | JSZip 3.10.1 (licença MIT), para gerar o .zip do pacote de prints |
 | `assets/js/dados-demo.js` | **Dados fictícios** usados na demonstração |
 | `exemplos/` | Arquivos fictícios para testar a importação |
 | `docs/ARQUITETURA.md` | Arquitetura proposta (protótipo e versão com servidor) |

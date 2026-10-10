@@ -140,6 +140,23 @@ window.Painel = window.Painel || {};
     { tema: 'cafe', eng: 3, x: 'Ideia de café da manhã rápido para os dias corridos: ovos mexidos com fruta.' },
     { tema: 'acesso', eng: 1.5, x: 'Os treinos novos da semana já estão liberados na plataforma.' }
   ];
+  // Respostas fictícias "da equipe", no tom do método (flexibilidade em vez de perfeição).
+  var RESPOSTAS = {
+    rotina: 'Monta assim: 3 treinos em dias fixos e um treino curto de reserva. Se perder um dia, usa o curto. Constância vale mais que perfeição!',
+    trabalho: 'O melhor horário é o que cabe no seu dia. Nos dias mais puxados, faz a versão de 15 minutos e está tudo certo.',
+    acesso: 'Na TV: abre o app da plataforma na smart TV e entra com o mesmo e-mail. Se não tiver o app, dá para espelhar pelo celular. Te mandei o passo a passo!',
+    cafe: 'Pode trocar sim! O importante é ter uma proteína no café. Escolhe o que for mais prático para a sua manhã.',
+    lanche: 'Ideias práticas: iogurte com fruta, ovo cozido, castanhas ou sanduíche natural. Deixa separado na noite anterior.',
+    gluteo: 'Com constância, em 6 a 8 semanas já dá para perceber. Foca na execução: desce devagar e contrai o glúteo lá em cima.',
+    barriga: 'Abdominal sozinho não tira a gordura da barriga. O que funciona é o treino completo com constância: a barriga vai junto com o corpo todo.',
+    motivacao: 'Nos dias sem vontade, faz só o aquecimento e o primeiro bloco. Quase sempre a vontade aparece depois que você começa. E se não aparecer, tudo bem também!',
+    tempo: 'Faz o treino curto de 15 minutos do dia! Treino curto feito vale muito mais que o treino perfeito que não acontece.',
+    objetivo: 'O objetivo do treino está no título da aula. Se o tempo for curto, escolhe um treino menor com o mesmo objetivo. Não precisa compensar o de ontem.',
+    constancia: 'Recomeçar faz parte da jornada! Volta com os treinos curtos essa semana, sem culpa. Nada do que você construiu se perdeu.',
+    comunidade: 'Desculpa a demora! Já te respondi por aqui, conta comigo.',
+    resultados: 'Que orgulho de você! Posso usar o seu relato, sem o seu nome, para inspirar outras alunas?',
+    outros: 'Obrigada por contar! Seguimos juntas.'
+  };
   var RESPOSTAS_CURTAS = ['Eu topo!', 'Tô dentro, bora!', 'Vou tentar essa semana', 'Conta comigo', 'Precisava ler isso hoje'];
 
   function gerar(temas, equipe) {
@@ -162,9 +179,11 @@ window.Painel = window.Painel || {};
       var auto = C.classificar(texto, temas);
       var revisado = d >= 6 && r() < 0.75;
       var tipo = revisado ? tipoVerdadeiro : auto.tipo;
+      var alunaId = escolher(r, ids);
+      var conversa = canal === 'whatsapp' ? 'wa:' + alunaId : 'tg:grupo';
       var m = {
-        id: 'd' + (++seq), origem: 'demo', canal: canal, alunaId: escolher(r, ids), data: data, texto: texto, equipe: false,
-        tipo: tipo, tema: revisado ? temaVerdadeiro : auto.tema, auto: auto, revisado: revisado, aut: null
+        id: 'd' + (++seq), origem: 'demo', canal: canal, conversa: conversa, alunaId: alunaId, data: data, texto: texto, equipe: false,
+        tipo: tipo, tema: revisado ? temaVerdadeiro : auto.tema, auto: auto, revisado: revisado, aut: null, resposta: null
       };
       if (tipo === 'depoimento' || tipo === 'evolucao') {
         var y = r();
@@ -172,6 +191,17 @@ window.Painel = window.Painel || {};
         m.aut = { status: st, confirmadoPor: (st === 'uso_interno' || st === 'divulgacao') ? equipe[0] : '', data: (st === 'nao_solicitada' ? null : data + 86400000) };
       }
       mensagens.push(m);
+      // Resposta da equipe (nem toda mensagem tem resposta registrada).
+      var chance = tipoVerdadeiro === 'outro' ? 0 : (tipoVerdadeiro === 'depoimento' || tipoVerdadeiro === 'evolucao') ? 0.5 : d === 0 ? 0.45 : 0.75;
+      if (r() < chance) {
+        var dr = data + (8 + Math.floor(r() * 170)) * 60000;
+        if (dr < agora) {
+          var resp = { id: 'd' + (++seq), origem: 'demo', canal: canal, conversa: conversa, alunaId: null, autor: escolher(r, equipe), data: dr,
+            texto: RESPOSTAS[temaVerdadeiro] || RESPOSTAS.outros, equipe: true, respondeA: m.id, tipo: 'outro', tema: temaVerdadeiro, revisado: true, aut: null };
+          mensagens.push(resp);
+          m.resposta = resp.id;
+        }
+      }
     }
 
     for (var d = 59; d >= 0; d--) {
@@ -182,7 +212,7 @@ window.Painel = window.Painel || {};
       var post = POSTS[Math.floor(r() * POSTS.length)];
       var hPost = dia + (7 + Math.floor(r() * 2)) * 3600000 + Math.floor(r() * 50) * 60000;
       if (hPost < agora) {
-        mensagens.push({ id: 'd' + (++seq), origem: 'demo', canal: 'telegram', alunaId: null, autor: 'Equipe (fictício)', data: hPost, texto: post.x, equipe: true, tipo: 'outro', tema: post.tema, revisado: true, aut: null });
+        mensagens.push({ id: 'd' + (++seq), origem: 'demo', canal: 'telegram', conversa: 'tg:grupo', alunaId: null, autor: equipe[0], data: hPost, texto: post.x, equipe: true, respondeA: null, tipo: 'outro', tema: post.tema, revisado: true, aut: null });
         var nResp = Math.round(post.eng * (0.6 + r() * 0.8));
         for (var q = 0; q < nResp; q++) {
           var dr = hPost + (5 + Math.floor(r() * 160)) * 60000;
@@ -211,68 +241,55 @@ window.Painel = window.Painel || {};
       { aluna: 'A-027', desc: '60 dias de programa', st: 'negada', dias: 20 },
       { aluna: 'A-034', desc: '30 dias de programa', st: 'divulgacao', dias: 6 }
     ].map(function (x, i) {
-      var il = ilustracao(i);
-      return {
-        id: 'f' + (i + 1),
-        origem: 'demo',
-        alunaId: x.aluna,
-        descricao: x.desc,
+      var a = ilustracao(i, 0), b = ilustracao(i, 1);
+      var f = {
+        id: 'f' + (i + 1), origem: 'demo', tipo: 'antes_depois', alunaId: x.aluna, descricao: x.desc,
         data: U.somarDias(hoje, -x.dias) + 10 * 3600000,
-        original: il.url,
-        largura: il.w,
-        altura: il.h,
-        sugestaoRosto: il.rostos,
+        fotos: { antes: a.url, depois: b.url },
+        rostos: { antes: [a.rosto], depois: [b.rosto] },
+        tratadas: { antes: null, depois: null }, tratadaInfo: {},
         ocultarRosto: true,
-        derivada: null,
-        derivadaInfo: null,
-        prontaDivulgacao: false,
         aut: { status: x.st, confirmadoPor: (x.st === 'uso_interno' || x.st === 'divulgacao') ? equipe[0] : '', data: x.st === 'nao_solicitada' ? null : U.somarDias(hoje, -x.dias + 1) }
       };
+      // As duas fotos autorizadas para divulgação já vêm com cópia de rosto oculto, para demonstrar o fluxo.
+      if (x.st === 'divulgacao') {
+        f.tratadas.antes = P.prints.pixelar(a.canvas, [a.rosto], 22).toDataURL('image/png');
+        f.tratadas.depois = P.prints.pixelar(b.canvas, [b.rosto], 22).toDataURL('image/png');
+        f.tratadaInfo = { antes: { quando: f.data + 3600000, areas: 1 }, depois: { quando: f.data + 3600000, areas: 1 } };
+      }
+      return f;
     });
 
-    return { alunas: alunas, mensagens: mensagens, midias: midias };
+    return { alunas: alunas, mensagens: mensagens.sort(function (a, b) { return a.data - b.data; }), midias: midias, prints: [] };
   }
 
-  // Ilustração neutra (silhuetas) no lugar de fotos reais. Não é foto de ninguém.
-  function ilustracao(i) {
-    var w = 800, h = 520;
+  // Ilustração neutra (silhueta) no lugar de foto real. Não é foto de ninguém.
+  function ilustracao(i, lado) {
+    var w = 600, h = 800;
     var c = document.createElement('canvas');
     c.width = w; c.height = h;
     var x = c.getContext('2d');
     var tons = ['#d9c7cf', '#cfd6dd', '#d6d1c4', '#c9d3c9', '#d8cbd9', '#d3cdc4'];
-    x.fillStyle = '#efe9ec';
+    x.fillStyle = lado ? '#f6f2f4' : '#ebe4e8';
     x.fillRect(0, 0, w, h);
-    var rostos = [];
-    [0, 1].forEach(function (lado) {
-      var ox = lado * 400;
-      x.fillStyle = lado ? '#f6f2f4' : '#ebe4e8';
-      x.fillRect(ox + 8, 8, 384, h - 16);
-      x.fillStyle = tons[i % tons.length];
-      // cabeça
-      x.beginPath(); x.arc(ox + 200, 130, 46, 0, Math.PI * 2); x.fill();
-      rostos.push({ x: ox + 148, y: 78, w: 104, h: 104 });
-      // olhos e boca simples para o desfoque ter o que esconder
-      x.fillStyle = '#7d6a73';
-      x.beginPath(); x.arc(ox + 184, 124, 5, 0, Math.PI * 2); x.arc(ox + 216, 124, 5, 0, Math.PI * 2); x.fill();
-      x.fillRect(ox + 186, 148, 28, 4);
-      // corpo (mais largo no "antes")
-      x.fillStyle = tons[i % tons.length];
-      x.beginPath(); x.ellipse(ox + 200, 330, lado ? 74 : 98, 140, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#5b4d54';
-      x.font = '600 26px system-ui, sans-serif';
-      x.fillText(lado ? 'DEPOIS' : 'ANTES', ox + 28, 50);
-    });
+    x.fillStyle = tons[i % tons.length];
+    x.beginPath(); x.arc(300, 190, 70, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#7d6a73';
+    x.beginPath(); x.arc(275, 180, 7, 0, Math.PI * 2); x.arc(325, 180, 7, 0, Math.PI * 2); x.fill();
+    x.fillRect(278, 218, 44, 6);
+    x.fillStyle = tons[i % tons.length];
+    x.beginPath(); x.ellipse(300, 520, lado ? 112 : 150, 230, 0, 0, Math.PI * 2); x.fill();
     x.save();
-    x.translate(w / 2, h / 2 + 40);
-    x.rotate(-0.32);
-    x.fillStyle = 'rgba(120, 40, 80, 0.28)';
-    x.font = '700 46px system-ui, sans-serif';
+    x.translate(w / 2, h / 2 + 60);
+    x.rotate(-0.42);
+    x.fillStyle = 'rgba(120, 40, 80, 0.30)';
     x.textAlign = 'center';
+    x.font = '700 44px system-ui, sans-serif';
     x.fillText('ILUSTRAÇÃO FICTÍCIA', 0, 0);
     x.font = '600 24px system-ui, sans-serif';
-    x.fillText('não é foto de uma pessoa real', 0, 40);
+    x.fillText('não é foto de uma pessoa real', 0, 36);
     x.restore();
-    return { url: c.toDataURL('image/png'), w: w, h: h, rostos: rostos };
+    return { canvas: c, url: c.toDataURL('image/png'), rosto: { x: 220, y: 110, w: 160, h: 160 } };
   }
 
   P.demo = { gerar: gerar };

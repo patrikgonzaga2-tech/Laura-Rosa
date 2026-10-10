@@ -30,9 +30,10 @@
   var NATUREZAS = { conteudo: 'Vira conteúdo', mentalidade: 'Bloqueio de mentalidade', entrega: 'Ajuste na entrega', prova: 'Prova social' };
   var ABAS = [
     { id: 'visao', nome: 'Visão geral' },
-    { id: 'resumo', nome: 'Resumo do dia' },
+    { id: 'dia', nome: 'Conversas do dia' },
     { id: 'dores', nome: 'Dores e objeções' },
     { id: 'resultados', nome: 'Antes e depois e resultados' },
+    { id: 'prints', nome: 'Prints para o Instagram' },
     { id: 'ideias', nome: 'Ideias de conteúdo' },
     { id: 'ajuda', nome: 'Como ajudar mais' },
     { id: 'mensagens', nome: 'Mensagens e revisão' },
@@ -51,13 +52,16 @@
     objecoes: A.objecoesPadrao(),
     resultados: A.resultadosPadrao(),
     equipe: ['Coordenação', 'Equipe 1', 'Equipe 2'],
-    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [] } },
+    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [] } },
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
     soNaoRevisadas: false,
     limite: 40,
     gran: 'dia',
     diaResumo: '',
+    conv: { mostrar: 'perguntas', semResposta: false },
+    subPrints: 'aguardando',
+    compositor: null,
     rel: { tipo: 'pauta', soRevisadas: true, secoes: { numeros: true, temas: true, dores: true, depoimentos: true } },
     impOrigem: 'whatsapp',
     impCanal: 'whatsapp',
@@ -141,6 +145,8 @@
     return 'Aluna ' + id;
   }
 
+  function respostaDe(m) { return m.resposta ? acharMsg(m.resposta) : null; }
+
   function prontoDivulgacao(m) { return m.revisado && m.aut && m.aut.status === 'divulgacao' && !!m.aut.confirmadoPor; }
 
   // Análise completa do período (pauta, objeções, resultados, interação, sugestões).
@@ -149,6 +155,7 @@
       lista: lista, anterior: anterior, todas: conj().mensagens, iv: iv,
       temas: S.temas, objecoes: S.objecoes, resultados: S.resultados,
       textoSeguro: textoSeguro, nomeTema: nomeTema, pronto: prontoDivulgacao,
+      respostaDe: respostaDe, textoEquipe: function (m) { return PRIV.mascararNomes(m.texto, alunasAtuais()); },
       sinais: A.sinaisAlunas(msgsAlunas(), S.temas, iv[1])
     });
   }
@@ -227,8 +234,10 @@
     }
     faixa.innerHTML += ' <span class="faixa-sim">Login e permissões são simulados neste protótipo.</span>';
 
+    var aguardando = (conj().prints || []).filter(function (x) { return x.status === 'aguardando'; }).length;
     document.getElementById('nav').innerHTML = ABAS.map(function (a) {
-      return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + '</button>';
+      var extra = a.id === 'prints' && aguardando ? '<span class="nav-cont" aria-label="' + aguardando + ' aguardando aprovação">' + aguardando + '</span>' : '';
+      return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + extra + '</button>';
     }).join('');
   }
 
@@ -273,7 +282,7 @@
         '<button type="button" class="btn" data-acao="aba" data-v="importar">Ir para Importar</button>');
       return;
     }
-    var fn = { visao: abaVisao, resumo: abaResumo, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig }[S.aba];
+    var fn = { visao: abaVisao, dia: abaDia, prints: abaPrints, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig }[S.aba];
     el.innerHTML = fn();
     if (S.aba === 'visao') desenharGrafico();
     if (S.aba === 'mensagens') renderListaMensagens();
@@ -398,27 +407,63 @@
     P.grafico.linhas(el, chaves.map(function (t) { return U.fmtData(t); }), rotulos, series);
   }
 
-  /* ---------- Resumo do dia ---------- */
+  /* ---------- Conversas do dia ---------- */
 
-  function abaResumo() {
+  function abaDia() {
     var fimRef = refFim();
     var dia = S.diaResumo ? U.deChave(S.diaResumo) : U.inicioDia(fimRef);
     var r = calcularResumo(dia);
-    var h = '<div class="cabeca-aba"><h1>Resumo do dia</h1><p class="sub">Gerado por regras a partir das mensagens do dia, comparando com o dia anterior e com a média dos 7 dias anteriores. Respeita os filtros de canal e assunto.</p></div>';
+    var a0 = U.inicioDia(dia), a1 = U.fimDia(dia);
+    var doDia = msgsAlunas().filter(function (m) { return m.data >= a0 && m.data <= a1 && passaFiltros(m); }).sort(function (x, y) { return x.data - y.data; });
+    var perguntas = doDia.filter(ehDor);
+    var lista = S.conv.mostrar === 'perguntas' ? perguntas : doDia;
+    if (S.conv.semResposta) lista = lista.filter(function (m) { return !m.resposta; });
+    var temas = U.contarPor(doDia, 'tema');
+    var topo = Object.keys(temas).sort(function (x, y) { return temas[y] - temas[x]; });
+
+    var h = '<div class="cabeca-aba"><h1>Conversas do dia</h1><p class="sub">O que aconteceu nas conversas que você já tem no WhatsApp e no grupo: o assunto do dia, quem perguntou o quê e o que a equipe respondeu. Aqui é só para ver e organizar. Ninguém é respondido pelo painel.</p></div>';
     h += '<div class="linha-controles"><label class="campo"><span>Dia</span><input type="date" id="dia-resumo" data-mudar="dia-resumo" value="' + U.chaveDia(dia) + '" min="' + U.chaveDia(refInicio()) + '" max="' + U.chaveDia(fimRef) + '"></label>' +
+      '<label class="campo"><span>Canal</span><select id="dia-canal" data-mudar="filtro" data-k="canal">' + opcoes(CANAIS, S.filtros.canal, 'Todos') + '</select></label>' +
       '<button type="button" class="btn btn-sec" data-acao="resumo-copiar">Copiar resumo (sem dados pessoais)</button></div>';
 
+    h += '<section class="assunto-dia"><span class="kpi-rot">Assunto do dia</span>' +
+      (topo.length ? '<p class="assunto-nome">' + esc(nomeTema(topo[0])) + ' <span class="sub">· ' + temas[topo[0]] + ' mensagens</span></p>' +
+        (topo.length > 1 ? '<p class="sub">Depois: ' + topo.slice(1, 4).map(function (t) { return esc(nomeTema(t)) + ' (' + temas[t] + ')'; }).join(' · ') + '</p>' : '') : '<p class="sub">Nenhuma mensagem neste dia.</p>') + '</section>';
+
+    var resp = perguntas.filter(function (m) { return m.resposta; }).length;
     h += '<section class="kpis kpis-4">' +
-      '<div class="kpi"><span class="kpi-rot">Mensagens no dia</span><span class="kpi-num">' + r.total + '</span><span class="kpi-var">ontem: ' + r.ontem + ' · média 7 dias: ' + r.media7.toFixed(1).replace('.', ',') + '</span></div>' +
-      '<div class="kpi"><span class="kpi-rot">Dúvidas e dificuldades</span><span class="kpi-num">' + r.dores + '</span><span class="kpi-var">' + r.queixas + ' queixa(s)</span></div>' +
+      '<div class="kpi"><span class="kpi-rot">Mensagens das alunas</span><span class="kpi-num">' + r.total + '</span><span class="kpi-var">ontem: ' + r.ontem + ' · média 7 dias: ' + r.media7.toFixed(1).replace('.', ',') + '</span></div>' +
+      '<div class="kpi"><span class="kpi-rot">Perguntas e dificuldades</span><span class="kpi-num">' + perguntas.length + '</span><span class="kpi-var">' + resp + ' com resposta registrada</span></div>' +
       '<div class="kpi"><span class="kpi-rot">Mensagens com objeção</span><span class="kpi-num">' + r.objecoes + '</span><span class="kpi-var">' + (r.objTop ? 'mais citada: "' + esc(r.objTop) + '"' : 'nenhuma') + '</span></div>' +
       '<div class="kpi"><span class="kpi-rot">Depoimentos e evolução</span><span class="kpi-num">' + (r.depo + r.evol) + '</span><span class="kpi-var">' + r.autorizados + ' já autorizados para divulgação</span></div>' +
       '</section>';
 
     h += '<div class="duas"><section class="painel-card"><h2>Destaques</h2><ul class="destaques">' + r.destaques.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul></section>';
     h += '<section class="painel-card"><h2>Pede atenção</h2>' + (r.atencao.length ? '<ul class="destaques">' + r.atencao.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul>' : '<p class="sub">Nada fora do normal neste dia.</p>') + '</section></div>';
+
+    h += '<section class="painel-card"><div class="card-topo"><h2>Quem perguntou e o que foi respondido</h2>' +
+      '<div class="seg seg-peq" role="group" aria-label="Mostrar">' +
+      '<button type="button" data-acao="conv-mostrar" data-v="perguntas" aria-pressed="' + (S.conv.mostrar === 'perguntas') + '">Perguntas e dificuldades</button>' +
+      '<button type="button" data-acao="conv-mostrar" data-v="todas" aria-pressed="' + (S.conv.mostrar === 'todas') + '">Todas as mensagens</button></div></div>' +
+      '<label class="check"><input type="checkbox" id="conv-sem" data-mudar="conv-sem"' + (S.conv.semResposta ? ' checked' : '') + '> Só as que não têm resposta registrada</label>' +
+      (lista.length ? '<div class="itens">' + lista.map(itemConversa).join('') + '</div>' : '<p class="sub">Nada para mostrar com essas opções.</p>') +
+      '<p class="nota-peq">A resposta vem dos arquivos importados. No Telegram, usamos o "responder" da mensagem. No WhatsApp, a primeira mensagem da equipe depois da pergunta (ligação estimada pelo horário).</p></section>';
+
     h += blocoSinais(U.fimDia(dia), 6);
     return h;
+  }
+
+  function itemConversa(m) {
+    var r = respostaDe(m);
+    var h = '<article class="item qa"><div class="item-topo">' + canalTag(m.canal) + '<span class="item-quem">' + esc(rotuloAluna(m.alunaId)) + '</span>' +
+      '<span class="chip">' + esc(nomeTema(m.tema)) + '</span><span class="chip">' + esc(nomeTipo(m.tipo)) + '</span><time>' + U.fmtHora(m.data) + '</time></div>' +
+      '<p class="item-texto">' + esc(textoSeguro(m)) + '</p>';
+    if (r) {
+      var min = Math.round((r.data - m.data) / 60000);
+      h += '<div class="resposta"><span class="resp-rot">Resposta de ' + esc(r.autor || 'equipe') + ' · ' + U.fmtHora(r.data) + ' (' + (min < 60 ? min + ' min' : Math.round(min / 60) + ' h') + ' depois)' + (m.respostaEstimada ? ' · ligação estimada' : '') + '</span>' +
+        '<p>' + esc(PRIV.mascararTexto(r.texto, alunasAtuais())) + '</p></div>';
+    } else h += '<p class="sem-resp">Sem resposta registrada nos arquivos.</p>';
+    return h + '</article>';
   }
 
   // Alunas que pedem um olhar mais próximo (uso interno; nunca vai para relatórios).
@@ -533,7 +578,7 @@
     var a = analisePeriodo();
     var provas = a.lista.filter(ehProva);
     var h = '<div class="cabeca-aba"><h1>Antes e depois e resultados</h1><p class="sub">Relatos de evolução, depoimentos e fotos, com controle de autorização. Nada é público por padrão.</p></div>';
-    h += subnav('subRes', [['ideias', 'Ideias de antes e depois'], ['relatos', 'Relatos e depoimentos', provas.length], ['fotos', 'Fotos', conj().midias.length]]);
+    h += subnav('subRes', [['ideias', 'Ideias de antes e depois'], ['relatos', 'Relatos e depoimentos', provas.length], ['fotos', 'Fotos e prints de conversa', conj().midias.length]]);
     if (S.subRes === 'fotos') return h + subFotos();
     if (S.subRes === 'relatos') {
       if (!provas.length) return h + vazio('Nada neste período', 'Mude o período ou os filtros para ver mais.');
@@ -543,6 +588,7 @@
           '<blockquote class="item-texto depo">' + esc(textoSeguro(m)) + '</blockquote>' +
           '<div class="item-meta">' + A.detectar(m.texto, S.resultados).map(function (id) { var rr = S.resultados.find(function (x) { return x.id === id; }); return '<span class="chip">' + esc(rr.nome) + '</span>'; }).join('') +
           classeChip(m) + autChip(m.aut) + (prontoDivulgacao(m) ? '<span class="chip chip-pronto">Pode ir para divulgação</span>' : '') + '</div>' +
+          (prontoDivulgacao(m) && pode('editar') ? '<div class="item-acoes"><button type="button" class="btn btn-peq" data-acao="abrir-compositor" data-fonte="msg" data-id="' + m.id + '">Criar card para o Instagram</button></div>' : '') +
           formAut('msg', m) + '</article>';
       }).join('') + '</div>' + (provas.length > S.limite ? '<button type="button" class="btn btn-sec mais" data-acao="mais">Mostrar mais</button>' : '');
     }
@@ -638,77 +684,95 @@
 
   function subFotos() {
     var ms = conj().midias;
-    var h = '<p class="sub">Acesso restrito. O arquivo original nunca é alterado: o desfoque gera uma cópia tratada separada, com prévia antes de salvar. Nada fica público por padrão.</p>';
+    var h = '<p class="sub">Acesso restrito. O arquivo original nunca é alterado: ocultar rosto, nome ou foto de perfil gera uma cópia separada, com prévia antes de salvar. Nada fica público por padrão.</p>';
     if (S.modo === 'demo') {
-      h += '<p class="nota">As imagens abaixo são <strong>ilustrações fictícias</strong> (silhuetas desenhadas pelo painel), não fotos de pessoas. Servem para testar o fluxo de autorização e desfoque.</p>';
+      h += '<p class="nota">As imagens abaixo são <strong>ilustrações fictícias</strong> (silhuetas desenhadas pelo painel), não fotos de pessoas. Servem para testar autorização, desfoque e montagem de prints.</p>';
     } else if (pode('editar')) {
-      h += '<section class="painel-card"><h2>Adicionar foto para revisão</h2><p class="sub">A foto fica só na memória desta aba. Ela não é enviada para nenhum lugar e some ao recarregar. Adicione apenas fotos que a aluna enviou para o acompanhamento.</p>' +
+      h += '<section class="painel-card"><h2>Adicionar antes e depois ou print de conversa</h2><p class="sub">Fica só na memória desta aba e some ao recarregar. Use apenas material que a aluna enviou. Para print de conversa (depoimento), envie só o primeiro arquivo.</p>' +
         '<div class="linha-controles">' +
         '<label class="campo"><span>Aluna</span><select id="foto-aluna">' + opcoes(Object.keys(alunasAtuais()).reduce(function (r, id) { r[id] = rotuloAluna(id); return r; }, {}), '', 'Sem vínculo') + '</select></label>' +
         '<label class="campo"><span>Descrição</span><input type="text" id="foto-desc" placeholder="Ex.: 60 dias de programa"></label>' +
-        '<label class="campo"><span>Arquivo de imagem</span><input type="file" id="foto-arquivo" accept="image/*"></label>' +
+        '<label class="campo"><span>Foto de antes (ou print da conversa)</span><input type="file" id="foto-antes" accept="image/*"></label>' +
+        '<label class="campo"><span>Foto de depois</span><input type="file" id="foto-depois" accept="image/*"></label>' +
         '<div class="campo campo-botao"><button type="button" class="btn" data-acao="foto-adicionar">Adicionar</button></div></div></section>';
     }
-    if (!ms.length) return h + vazio('Nenhuma foto ainda', S.modo === 'demo' ? 'Sem ilustrações.' : 'Adicione uma foto acima para testar o fluxo.');
-    h += '<div class="galeria">' + ms.map(cardFoto).join('') + '</div>';
-    return h;
+    if (!ms.length) return h + vazio('Nenhuma foto ainda', S.modo === 'demo' ? 'Sem ilustrações.' : 'Adicione material acima para testar o fluxo.');
+    return h + '<div class="galeria">' + ms.map(cardFoto).join('') + '</div>';
   }
 
+  function ladosDe(f) { return f.tipo === 'print_conversa' ? [['antes', 'Print']] : [['antes', 'Antes'], ['depois', 'Depois']]; }
+
+  function faltaTratar(f) {
+    return f.ocultarRosto && ladosDe(f).some(function (l) { return !f.tratadas[l[0]]; });
+  }
+
+  function autValida(aut) { return !!(aut && aut.status === 'divulgacao' && aut.confirmadoPor); }
+
   function cardFoto(f) {
-    var podeVerOriginal = pode('editar');
-    var img;
-    if (podeVerOriginal) img = '<img src="' + (f.derivada || f.original) + '" alt="' + (f.derivada ? 'Cópia tratada' : 'Original') + ' · ' + esc(f.descricao) + '">';
-    else if (f.derivada) img = '<img src="' + f.derivada + '" alt="Cópia tratada · ' + esc(f.descricao) + '">';
-    else img = '<div class="trava-img"><span aria-hidden="true">🔒</span> Original com acesso restrito. Ainda não há cópia tratada.</div>';
-    var podeLiberar = f.aut && f.aut.status === 'divulgacao' && f.aut.confirmadoPor && (!f.ocultarRosto || f.derivada);
+    var podeVer = pode('editar');
+    var nPrints = (conj().prints || []).filter(function (p) { return p.fonte === 'midia' && p.fonteId === f.id; }).length;
+    var imgs = ladosDe(f).map(function (l) {
+      var tratada = f.tratadas[l[0]];
+      var src = tratada || (podeVer ? f.fotos[l[0]] : null);
+      return '<figure class="foto-lado">' + (src ? '<img src="' + src + '" alt="' + l[1] + ' · ' + esc(f.descricao) + '">' : '<div class="trava-img"><span aria-hidden="true">🔒</span> Acesso restrito</div>') +
+        '<figcaption>' + l[1] + (tratada ? ' · <strong>rosto oculto</strong>' : podeVer ? ' · original' : '') + '</figcaption>' +
+        (pode('editar') ? '<button type="button" class="btn btn-sec btn-peq" data-acao="abrir-editor" data-id="' + f.id + '" data-lado="' + l[0] + '">' + (tratada ? 'Refazer desfoque' : 'Ocultar rosto ou dados') + '</button>' : '') +
+        '</figure>';
+    }).join('');
+    var bloqueio = !autValida(f.aut) ? 'Precisa de autorização para divulgação com quem confirmou.' : faltaTratar(f) ? 'Falta a cópia com rosto oculto.' : '';
     return '<article class="foto">' +
-      '<div class="foto-img">' + img + (f.derivada ? '<span class="selo">Cópia tratada</span>' : podeVerOriginal ? '<span class="selo selo-orig">Original</span>' : '') + '</div>' +
-      '<div class="foto-corpo"><div class="item-topo"><span class="item-quem">' + esc(rotuloAluna(f.alunaId)) + '</span><time>' + U.fmtDataAno(f.data) + '</time></div>' +
+      '<div class="foto-lados">' + imgs + '</div>' +
+      '<div class="foto-corpo"><div class="item-topo"><span class="item-quem">' + esc(rotuloAluna(f.alunaId)) + '</span><span class="chip">' + (f.tipo === 'print_conversa' ? 'Print de conversa' : 'Antes e depois') + '</span><time>' + U.fmtDataAno(f.data) + '</time></div>' +
       '<p>' + esc(f.descricao) + '</p>' +
-      '<div class="item-meta">' + autChip(f.aut) + (f.ocultarRosto ? '<span class="chip">Ocultar rosto</span>' : '') +
-      (f.prontaDivulgacao ? '<span class="chip chip-pronto">Marcada como pronta para divulgação</span>' : '') + '</div>' +
-      (f.derivadaInfo ? '<p class="nota-peq">Cópia tratada criada em ' + U.fmtDataHora(f.derivadaInfo.quando) + ' (' + f.derivadaInfo.areas + ' área(s) desfocada(s)). O original foi mantido.</p>' : '') +
+      '<div class="item-meta">' + autChip(f.aut) + (nPrints ? '<span class="chip chip-pronto">' + nPrints + ' print(s) criado(s)</span>' : '') + '</div>' +
       '<div class="item-acoes">' +
-      (pode('editar') ? '<button type="button" class="btn btn-sec btn-peq" data-acao="abrir-editor" data-id="' + f.id + '">' + (f.derivada ? 'Refazer cópia tratada' : 'Criar cópia tratada') + '</button>' : '') +
-      (pode('editar') ? '<label class="check"><input type="checkbox" data-mudar="ocultar-rosto" data-id="' + f.id + '"' + (f.ocultarRosto ? ' checked' : '') + '> Exigir rosto oculto</label>' : '') +
-      (pode('exportar') && f.derivada ? '<button type="button" class="btn btn-sec btn-peq" data-acao="baixar-derivada" data-id="' + f.id + '">Baixar cópia tratada</button>' : '') +
-      (pode('editar') ? '<button type="button" class="btn btn-peq" data-acao="pronta-divulgacao" data-id="' + f.id + '"' + (podeLiberar ? '' : ' disabled title="Precisa de autorização para divulgação com quem confirmou e, se exigido, cópia com rosto oculto."') + '>' + (f.prontaDivulgacao ? 'Desmarcar' : 'Marcar como pronta') + '</button>' : '') +
-      '</div>' + formAut('midia', f) + '</div></article>';
+      (pode('editar') ? '<label class="check"><input type="checkbox" data-mudar="ocultar-rosto" data-id="' + f.id + '"' + (f.ocultarRosto ? ' checked' : '') + '> Exigir rosto oculto no print</label>' : '') +
+      (pode('editar') ? '<button type="button" class="btn btn-peq" data-acao="abrir-compositor" data-fonte="midia" data-id="' + f.id + '"' + (bloqueio ? ' disabled title="' + esc(bloqueio) + '"' : '') + '>Criar print para o Instagram</button>' : '') +
+      '</div>' + (bloqueio && pode('editar') ? '<p class="nota-peq">Para criar o print: ' + esc(bloqueio) + '</p>' : '') +
+      formAut('midia', f) + '</div></article>';
   }
 
   /* ---------- Editor de desfoque ---------- */
 
-  function abrirEditor(id) {
+  function abrirEditor(id, lado) {
     var f = conj().midias.find(function (x) { return x.id === id; });
     if (!f || !pode('editar')) return;
-    var img = new Image();
-    img.onload = function () {
-      S.editor = { foto: f, img: img, areas: [], bloco: 18, previa: null, arrasto: null };
+    P.prints.carregar(f.fotos[lado]).then(function (img) {
+      S.editor = { foto: f, lado: lado, img: img, areas: [], bloco: 18, previa: null, arrasto: null };
       renderEditor();
-    };
-    img.src = f.original;
+    });
   }
 
   function renderEditor() {
     var E = S.editor, el = document.getElementById('modal');
-    if (!E) { el.hidden = true; el.innerHTML = ''; document.body.classList.remove('com-modal'); return; }
-    document.body.classList.add('com-modal');
-    el.hidden = false;
-    el.innerHTML = '<div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="ed-tit">' +
-      '<div class="card-topo"><h2 id="ed-tit">Criar cópia tratada</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-editor">Fechar</button></div>' +
-      '<p class="sub">Arraste sobre a imagem para marcar as áreas a desfocar (rosto, tatuagens, fundo com informação pessoal). O original não muda.</p>' +
+    if (!E) { fecharModal(); return; }
+    abrirModal('<div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="ed-tit">' +
+      '<div class="card-topo"><h2 id="ed-tit">Ocultar rosto ou dados · ' + (E.foto.tipo === 'print_conversa' ? 'Print' : E.lado === 'antes' ? 'Antes' : 'Depois') + '</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-editor">Fechar</button></div>' +
+      '<p class="sub">Arraste sobre a imagem para marcar o que esconder: rosto, nome, foto de perfil, número, tatuagem ou fundo com informação pessoal. O original não muda.</p>' +
       '<div class="editor-grade"><div><p class="rot-canvas">Original</p><canvas id="ed-canvas" class="ed-canvas"></canvas></div>' +
-      '<div><p class="rot-canvas">Prévia da cópia tratada</p>' + (E.previa ? '<img class="ed-previa" src="' + E.previa + '" alt="Prévia da cópia tratada">' : '<div class="ed-vazio">Gere a prévia para conferir antes de salvar.</div>') + '</div></div>' +
+      '<div><p class="rot-canvas">Prévia da cópia</p>' + (E.previa ? '<img class="ed-previa" src="' + E.previa + '" alt="Prévia da cópia com áreas ocultas">' : '<div class="ed-vazio">Gere a prévia para conferir antes de salvar.</div>') + '</div></div>' +
       '<div class="linha-controles">' +
       '<span class="sub">' + E.areas.length + ' área(s) marcada(s)</span>' +
-      (E.foto.sugestaoRosto ? '<button type="button" class="btn btn-sec btn-peq" data-acao="ed-sugestao">Marcar rostos da ilustração</button>' : '') +
+      (E.foto.rostos && E.foto.rostos[E.lado] ? '<button type="button" class="btn btn-sec btn-peq" data-acao="ed-sugestao">Marcar rosto da ilustração</button>' : '') +
       '<button type="button" class="btn btn-sec btn-peq" data-acao="ed-limpar">Limpar áreas</button>' +
       '<label class="campo campo-peq"><span>Intensidade</span><select id="ed-bloco" data-mudar="ed-bloco">' + opcoes({ '10': 'Leve', '18': 'Média', '30': 'Forte' }, String(E.bloco)) + '</select></label>' +
       '<button type="button" class="btn btn-sec" data-acao="ed-previa"' + (E.areas.length ? '' : ' disabled') + '>Gerar prévia</button>' +
-      '<button type="button" class="btn" data-acao="ed-salvar"' + (E.previa ? '' : ' disabled') + '>Salvar cópia tratada</button>' +
-      '</div><p class="nota-peq">Tamanho e formato finais para Instagram ainda serão definidos com você. Por enquanto a cópia mantém o tamanho original.</p></div>';
+      '<button type="button" class="btn" data-acao="ed-salvar"' + (E.previa ? '' : ' disabled') + '>Salvar cópia</button>' +
+      '</div></div>');
     desenharEditor();
     ligarCanvas();
+  }
+
+  function abrirModal(html) {
+    var el = document.getElementById('modal');
+    document.body.classList.add('com-modal');
+    el.hidden = false;
+    el.innerHTML = html;
+  }
+  function fecharModal() {
+    var el = document.getElementById('modal');
+    el.hidden = true; el.innerHTML = '';
+    document.body.classList.remove('com-modal');
   }
 
   function desenharEditor() {
@@ -754,20 +818,171 @@
 
   function gerarPrevia() {
     var E = S.editor;
-    var w = E.img.naturalWidth, h = E.img.naturalHeight;
-    var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    var x = cv.getContext('2d');
-    x.drawImage(E.img, 0, 0);
-    var b = E.bloco * Math.max(1, w / 800);
-    E.areas.forEach(function (a) {
-      var pw = Math.max(1, Math.round(a.w / b)), ph = Math.max(1, Math.round(a.h / b));
-      var t = document.createElement('canvas'); t.width = pw; t.height = ph;
-      t.getContext('2d').drawImage(E.img, a.x, a.y, a.w, a.h, 0, 0, pw, ph);
-      x.imageSmoothingEnabled = false;
-      x.drawImage(t, 0, 0, pw, ph, a.x, a.y, a.w, a.h);
-      x.imageSmoothingEnabled = true;
+    E.previa = P.prints.pixelar(E.img, E.areas, E.bloco).toDataURL('image/png');
+  }
+
+  /* ---------- Montagem de prints ---------- */
+
+  function abrirCompositor(fonte, id) {
+    if (!pode('editar')) return;
+    var base = { fonte: fonte, id: id, formato: 'feed', layout: 'lado', rotulos: true, periodo: '', assinatura: S.assinatura || '', fundo: 'claro', atribuicao: 'Aluna do programa', previa: null, imgs: {} };
+    if (fonte === 'msg') {
+      var m = acharMsg(id);
+      if (!prontoDivulgacao(m)) { avisar('Esse relato ainda não tem autorização para divulgação.'); return; }
+      S.compositor = base;
+      gerarPrint();
+      renderCompositor();
+      return;
+    }
+    var f = acharFoto(id);
+    if (!autValida(f.aut) || faltaTratar(f)) { avisar('Falta autorização ou cópia com rosto oculto.'); return; }
+    base.periodo = f.tipo === 'print_conversa' ? '' : f.descricao;
+    var lados = ladosDe(f);
+    Promise.all(lados.map(function (l) { return P.prints.carregar(f.tratadas[l[0]] || f.fotos[l[0]]); })).then(function (imgs) {
+      lados.forEach(function (l, i) { base.imgs[l[0]] = imgs[i]; });
+      S.compositor = base;
+      gerarPrint();
+      renderCompositor();
     });
-    E.previa = cv.toDataURL('image/png');
+  }
+
+  function gerarPrint() {
+    var K = S.compositor, PR = P.prints;
+    if (K.fonte === 'msg') {
+      K.previa = PR.cardDepoimento({ formato: K.formato, texto: textoSeguro(acharMsg(K.id)), atribuicao: K.atribuicao, assinatura: K.assinatura, fundo: K.fundo });
+      return;
+    }
+    var f = acharFoto(K.id);
+    K.previa = f.tipo === 'print_conversa'
+      ? PR.printConversa({ formato: K.formato, imagem: K.imgs.antes, assinatura: K.assinatura, fundo: K.fundo })
+      : PR.antesDepois({ formato: K.formato, layout: K.layout, antes: K.imgs.antes, depois: K.imgs.depois, rotulos: K.rotulos, periodo: K.periodo, assinatura: K.assinatura, fundo: K.fundo });
+  }
+
+  function renderCompositor() {
+    var K = S.compositor;
+    if (!K) { fecharModal(); return; }
+    var PR = P.prints;
+    var fmts = {}; Object.keys(PR.FORMATOS).forEach(function (k) { fmts[k] = PR.FORMATOS[k].nome; });
+    var fundos = {}; Object.keys(PR.FUNDOS).forEach(function (k) { fundos[k] = PR.FUNDOS[k].nome; });
+    var ehMsg = K.fonte === 'msg', f = ehMsg ? null : acharFoto(K.id);
+    var ad = f && f.tipo !== 'print_conversa';
+    abrirModal('<div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="cp-tit">' +
+      '<div class="card-topo"><h2 id="cp-tit">' + (ehMsg ? 'Card de depoimento' : ad ? 'Print de antes e depois' : 'Print de conversa') + '</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-compositor">Fechar</button></div>' +
+      '<div class="compositor"><div class="cp-controles">' +
+      '<label class="campo"><span>Formato</span><select id="cp-formato" data-mudar="cp" data-k="formato">' + opcoes(fmts, K.formato) + '</select></label>' +
+      (ad ? '<label class="campo"><span>Disposição</span><select id="cp-layout" data-mudar="cp" data-k="layout">' + opcoes({ lado: 'Lado a lado', empilhado: 'Um em cima do outro' }, K.layout) + '</select></label>' +
+        '<label class="check"><input type="checkbox" id="cp-rotulos" data-mudar="cp" data-k="rotulos"' + (K.rotulos ? ' checked' : '') + '> Mostrar "ANTES" e "DEPOIS"</label>' +
+        '<label class="campo"><span>Texto embaixo</span><input type="text" id="cp-periodo" data-mudar="cp" data-k="periodo" value="' + esc(K.periodo) + '" placeholder="Ex.: 60 dias de constância"></label>' : '') +
+      (ehMsg ? '<label class="campo"><span>Assinatura do depoimento</span><input type="text" id="cp-atrib" data-mudar="cp" data-k="atribuicao" value="' + esc(K.atribuicao) + '"></label>' +
+        '<p class="nota-peq">Não use nome ou sobrenome sem autorização para isso.</p>' : '') +
+      '<label class="campo"><span>Perfil (opcional)</span><input type="text" id="cp-assin" data-mudar="cp" data-k="assinatura" value="' + esc(K.assinatura) + '" placeholder="@seuperfil"></label>' +
+      '<label class="campo"><span>Fundo</span><select id="cp-fundo" data-mudar="cp" data-k="fundo">' + opcoes(fundos, K.fundo) + '</select></label>' +
+      '<button type="button" class="btn" data-acao="cp-enviar">Enviar para aprovação</button>' +
+      '<p class="nota-peq">Os formatos são uma sugestão inicial. Me diga os tamanhos que a social media usa e eu ajusto.</p>' +
+      '</div><div class="cp-previa"><p class="rot-canvas">Prévia</p><img src="' + K.previa + '" alt="Prévia do print"></div></div></div>');
+  }
+
+  /* ---------- Prints para o Instagram ---------- */
+
+  function fonteDoPrint(p) { return p.fonte === 'msg' ? acharMsg(p.fonteId) : acharFoto(p.fonteId); }
+  function printValido(p) {
+    var f = fonteDoPrint(p);
+    if (!f) return false;
+    return p.fonte === 'msg' ? prontoDivulgacao(f) : autValida(f.aut);
+  }
+  var STATUS_PRINT = { aguardando: 'Aguardando sua aprovação', ajuste: 'Pediu ajuste', aprovado: 'Aprovado' };
+  var TIPOS_PRINT = { antes_depois: 'Antes e depois', depoimento: 'Card de depoimento', print_conversa: 'Print de conversa' };
+
+  function abaPrints() {
+    var prints = conj().prints || [];
+    var cont = U.contarPor(prints, 'status');
+    var h = '<div class="cabeca-aba"><h1>Prints para o Instagram</h1><p class="sub">Material pronto para post, montado só a partir de fotos e depoimentos autorizados. Você aprova, e os aprovados vão para a pasta da social media.</p></div>';
+    h += '<ol class="fluxo"><li><strong>Autorização</strong><span>Aluna autorizou o uso no Instagram e alguém da equipe confirmou</span></li><li><strong>Print</strong><span>Rosto oculto, quando exigido, e montagem no formato do post</span></li><li><strong>Sua aprovação</strong><span>Aprovar ou pedir ajuste</span></li><li><strong>Drive da social media</strong><span>Pasta privada, compartilhada só com ela</span></li></ol>';
+
+    // Material pronto para virar print
+    var fotosProntas = conj().midias.filter(function (f) { return autValida(f.aut) && !prints.some(function (p) { return p.fonte === 'midia' && p.fonteId === f.id; }); });
+    var depoProntos = msgsAlunas().filter(function (m) { return ehProva(m) && prontoDivulgacao(m) && !prints.some(function (p) { return p.fonte === 'msg' && p.fonteId === m.id; }); }).sort(function (a, b) { return b.data - a.data; });
+    if (pode('editar') && (fotosProntas.length || depoProntos.length)) {
+      h += '<section class="painel-card"><h2>Autorizados e ainda sem print</h2><div class="prontos">' +
+        fotosProntas.map(function (f) {
+          var falta = faltaTratar(f);
+          return '<div class="pronto"><span class="chip">' + (f.tipo === 'print_conversa' ? 'Print de conversa' : 'Antes e depois') + '</span><span>' + esc(rotuloAluna(f.alunaId)) + ' · ' + esc(f.descricao) + '</span>' +
+            (falta ? '<button type="button" class="btn btn-sec btn-peq" data-acao="ir-fotos">Falta ocultar o rosto</button>' : '<button type="button" class="btn btn-peq" data-acao="abrir-compositor" data-fonte="midia" data-id="' + f.id + '">Criar print</button>') + '</div>';
+        }).join('') +
+        depoProntos.slice(0, 6).map(function (m) {
+          return '<div class="pronto"><span class="chip">' + esc(nomeTipo(m.tipo)) + '</span><span>' + citar(textoSeguro(m)) + ' <span class="sub">· ' + esc(rotuloAluna(m.alunaId)) + ', ' + U.fmtData(m.data) + '</span></span><button type="button" class="btn btn-peq" data-acao="abrir-compositor" data-fonte="msg" data-id="' + m.id + '">Criar card</button></div>';
+        }).join('') + '</div>' + (depoProntos.length > 6 ? '<p class="sub">+' + (depoProntos.length - 6) + ' depoimentos autorizados em "Antes e depois e resultados".</p>' : '') + '</section>';
+    }
+
+    h += subnav('subPrints', [['aguardando', 'Aguardando aprovação', cont.aguardando || 0], ['ajuste', 'Pediu ajuste', cont.ajuste || 0], ['aprovado', 'Aprovados', cont.aprovado || 0], ['todos', 'Todos', prints.length]]);
+    var lista = prints.filter(function (p) { return S.subPrints === 'todos' || p.status === S.subPrints; }).slice().reverse();
+    if (!lista.length) h += vazio('Nada aqui', 'Crie prints a partir das fotos e depoimentos autorizados.');
+    else h += '<div class="prints">' + lista.map(cardPrint).join('') + '</div>';
+
+    var aprovados = prints.filter(function (p) { return p.status === 'aprovado' && printValido(p); });
+    h += '<section class="painel-card"><h2>Enviar para o Drive da social media</h2>' +
+      '<p class="sub">' + aprovados.length + ' print(s) aprovado(s). Estrutura proposta: <span class="mono">Painel de acompanhamento/Materiais autorizados/Instagram/AAAA-MM/</span>, com uma lista dos arquivos sem dados pessoais.</p>' +
+      '<div class="linha-controles"><button type="button" class="btn" disabled title="Depende da configuração do Google Drive (próxima etapa)">Enviar ao Drive (ainda não conectado)</button>' +
+      (pode('exportar') ? '<button type="button" class="btn btn-sec" data-acao="pacote-drive"' + (aprovados.length ? '' : ' disabled') + '>Baixar pacote dos aprovados (.zip)</button>' : '') + '</div>' +
+      '<p class="nota-peq">Enquanto o Drive não está conectado, baixe o pacote e arraste a pasta para o Drive. Não deixe a pasta com link público: compartilhe só com o e-mail da social media.</p>' +
+      (pode('exportar') ? '' : semPermissao('baixar o pacote')) + '</section>';
+    return h;
+  }
+
+  function cardPrint(p) {
+    var valido = printValido(p);
+    var fmt = P.prints.FORMATOS[p.formato];
+    var h = '<article class="print-card' + (valido ? '' : ' print-invalido') + '">' +
+      '<button type="button" class="print-img" data-acao="ver-print" data-id="' + p.id + '" style="aspect-ratio:' + fmt.w + ' / ' + fmt.h + '"><img src="' + p.url + '" alt="' + esc(TIPOS_PRINT[p.tipo]) + ' em ' + esc(fmt.nome) + '"></button>' +
+      '<div class="foto-corpo"><div class="item-meta"><span class="chip">' + esc(TIPOS_PRINT[p.tipo]) + '</span><span class="chip">' + esc(fmt.nome.split(' (')[0]) + '</span>' +
+      '<span class="st-print st-' + p.status + '">' + esc(STATUS_PRINT[p.status]) + '</span></div>' +
+      '<p class="sub">' + esc(rotuloAluna(p.alunaId)) + ' · criado em ' + U.fmtDataHora(p.criadoEm) + (p.aprovadoEm ? ' · aprovado por ' + esc(p.aprovadoPor) + ' em ' + U.fmtDataAno(p.aprovadoEm) : '') + (p.pacoteEm ? ' · no pacote de ' + U.fmtDataAno(p.pacoteEm) : '') + '</p>' +
+      (p.nota ? '<p class="nota-peq">Ajuste pedido: ' + esc(p.nota) + '</p>' : '') +
+      (!valido ? '<p class="erro">A autorização não vale mais. Não usar.</p>' : '');
+    var acoes = '';
+    if (valido && pode('admin') && p.status !== 'aprovado') acoes += '<button type="button" class="btn btn-peq" data-acao="print-aprovar" data-id="' + p.id + '">Aprovar</button>';
+    if (valido && pode('admin') && p.status === 'aguardando') acoes += '<input type="text" id="nota-' + p.id + '" class="nota-input" placeholder="O que ajustar?" aria-label="O que ajustar"><button type="button" class="btn btn-sec btn-peq" data-acao="print-ajuste" data-id="' + p.id + '">Pedir ajuste</button>';
+    if (valido && pode('exportar') && p.status === 'aprovado') acoes += '<button type="button" class="btn btn-sec btn-peq" data-acao="print-baixar" data-id="' + p.id + '">Baixar</button>';
+    if (pode('editar')) acoes += '<button type="button" class="btn btn-sec btn-peq" data-acao="print-descartar" data-id="' + p.id + '">Descartar</button>';
+    if (!pode('admin') && p.status === 'aguardando') acoes += '<span class="sub">Só a função Administração aprova.</span>';
+    return h + (acoes ? '<div class="item-acoes">' + acoes + '</div>' : '') + '</div></article>';
+  }
+
+  function nomeArquivoPrint(p) {
+    return U.chaveDia(p.aprovadoEm || p.criadoEm) + '_' + p.tipo.replace('_', '-') + '_' + p.formato + '_' + p.id + '.png';
+  }
+
+  function blobDeDataURL(url) {
+    var partes = url.split(','), bin = atob(partes[1]), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: 'image/png' });
+  }
+
+  function baixarPacote() {
+    var aprovados = conj().prints.filter(function (p) { return p.status === 'aprovado' && printValido(p); });
+    if (!aprovados.length) return;
+    var demo = S.modo === 'demo';
+    var mes = U.chaveDia(Date.now()).slice(0, 7);
+    var leia = (demo ? '*** MATERIAL FICTÍCIO DE DEMONSTRAÇÃO. NÃO PUBLICAR. ***\n\n' : '') +
+      'Prints aprovados para o Instagram (' + U.fmtDataAno(Date.now()) + ')\nAntes de publicar: confira se a autorização continua válida no painel.\n\n' +
+      aprovados.map(function (p) {
+        var f = fonteDoPrint(p);
+        return nomeArquivoPrint(p) + ' | ' + TIPOS_PRINT[p.tipo] + ' | ' + P.prints.FORMATOS[p.formato].nome + ' | aprovado por ' + p.aprovadoPor + ' em ' + U.fmtDataAno(p.aprovadoEm) + ' | autorização confirmada por ' + (f.aut ? f.aut.confirmadoPor : '');
+      }).join('\n') + '\n';
+    var pasta = (demo ? 'FICTICIO-' : '') + 'Instagram/' + mes + '/';
+    if (window.JSZip) {
+      var zip = new window.JSZip();
+      aprovados.forEach(function (p) { zip.file(pasta + nomeArquivoPrint(p), p.url.split(',')[1], { base64: true }); });
+      zip.file(pasta + 'LEIA-ME.txt', leia);
+      zip.generateAsync({ type: 'blob' }).then(function (b) { U.baixar((demo ? 'FICTICIO-' : '') + 'prints-aprovados-' + U.chaveDia(Date.now()) + '.zip', b); });
+    } else {
+      aprovados.forEach(function (p, i) { setTimeout(function () { U.baixar(nomeArquivoPrint(p), blobDeDataURL(p.url)); }, i * 400); });
+      U.baixar('LEIA-ME.txt', leia, 'text/plain');
+    }
+    aprovados.forEach(function (p) { p.pacoteEm = Date.now(); });
+    registrar('Baixou pacote para o Drive', aprovados.length + ' print(s) aprovado(s)');
+    avisar('Pacote gerado com ' + aprovados.length + ' print(s).');
+    render();
   }
 
   /* ---------- Relatórios ---------- */
@@ -996,9 +1211,33 @@
         }
       }
       var auto = C.classificar(x.texto, S.temas);
-      return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, alunaId: alunaId, tipo: eq ? 'outro' : auto.tipo, tema: auto.tema, auto: auto, revisado: eq, aut: null };
+      return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, conversa: x.canal + ':' + p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, autor: eq ? x.remetente : null,
+        alunaId: alunaId, tipo: eq ? 'outro' : auto.tipo, tema: auto.tema, auto: auto, revisado: eq, aut: null, resposta: null, respondeA: null, idOrigem: x.idOrigem, respondeOrigem: x.respondeOrigem };
+    });
+    // Liga cada pergunta à resposta da equipe.
+    // Telegram: pelo "responder" da mensagem. Sem isso: primeira mensagem da equipe depois (WhatsApp até 24 h; grupo até 1 h), marcada como estimada.
+    var porOrigem = {};
+    novas.forEach(function (m) { if (m.idOrigem != null) porOrigem[m.idOrigem] = m; });
+    novas.forEach(function (m) {
+      if (!m.equipe || m.respondeOrigem == null) return;
+      var alvo = porOrigem[m.respondeOrigem];
+      if (alvo && !alvo.equipe) { m.respondeA = alvo.id; if (!alvo.resposta) alvo.resposta = m.id; }
+    });
+    var ordenadas = novas.slice().sort(function (a, b) { return a.data - b.data; });
+    ordenadas.forEach(function (m, i) {
+      if (m.equipe || m.resposta || !ehDor(m)) return;
+      var limite = m.data + (m.canal === 'whatsapp' ? 24 : 1) * 3600000;
+      for (var k = i + 1; k < ordenadas.length && ordenadas[k].data <= limite; k++) {
+        var e = ordenadas[k];
+        if (e.equipe && (e.respondeOrigem == null || e.respondeA === m.id)) {
+          m.resposta = e.id; m.respostaEstimada = e.respondeA !== m.id;
+          if (!e.respondeA) e.respondeA = m.id;
+          break;
+        }
+      }
     });
     novas.forEach(function (m) {
+      delete m.idOrigem; delete m.respondeOrigem;
       if (!m.equipe && ehProva(m)) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
     });
     c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
@@ -1101,52 +1340,95 @@
         return;
       }
       alvo.aut = { status: st, confirmadoPor: st === 'uso_interno' || st === 'divulgacao' ? por : '', data: Date.now() };
-      if (st !== 'divulgacao' && alvo.prontaDivulgacao) alvo.prontaDivulgacao = false;
       registrar('Registrou autorização', (b.dataset.alvo === 'msg' ? 'Msg ' : 'Foto ') + alvo.id + ': ' + AUT[st] + (por ? ' (confirmado por ' + por + ')' : ''));
       avisar('Autorização registrada.');
       render();
     },
-    'abrir-editor': function (b) { abrirEditor(b.dataset.id); },
-    'fechar-editor': function () { S.editor = null; renderEditor(); },
-    'ed-sugestao': function () { var E = S.editor; E.areas = E.foto.sugestaoRosto.map(function (r) { return Object.assign({}, r); }); E.previa = null; renderEditor(); },
+    'abrir-editor': function (b) { abrirEditor(b.dataset.id, b.dataset.lado); },
+    'fechar-editor': function () { S.editor = null; fecharModal(); },
+    'ed-sugestao': function () { var E = S.editor; E.areas = E.foto.rostos[E.lado].map(function (r) { return Object.assign({}, r); }); E.previa = null; renderEditor(); },
     'ed-limpar': function () { S.editor.areas = []; S.editor.previa = null; renderEditor(); },
     'ed-previa': function () { gerarPrevia(); renderEditor(); },
     'ed-salvar': function () {
       var E = S.editor;
-      E.foto.derivada = E.previa;
-      E.foto.derivadaInfo = { quando: Date.now(), areas: E.areas.length };
-      registrar('Criou cópia tratada', 'Foto ' + E.foto.id + ' · ' + E.areas.length + ' área(s) desfocada(s); original mantido');
+      E.foto.tratadas[E.lado] = E.previa;
+      E.foto.tratadaInfo[E.lado] = { quando: Date.now(), areas: E.areas.length };
+      registrar('Criou cópia com áreas ocultas', 'Foto ' + E.foto.id + ' (' + E.lado + ') · ' + E.areas.length + ' área(s); original mantido');
       S.editor = null;
-      renderEditor();
-      avisar('Cópia tratada salva. O original foi mantido.');
+      fecharModal();
+      avisar('Cópia salva. O original foi mantido.');
       render();
     },
-    'baixar-derivada': function (b) {
+    'abrir-compositor': function (b) { abrirCompositor(b.dataset.fonte, b.dataset.id); },
+    'fechar-compositor': function () { S.compositor = null; fecharModal(); },
+    'cp-enviar': function () {
+      var K = S.compositor;
+      if (!K || !pode('editar')) return;
+      var c = conj();
+      var fonte = K.fonte === 'msg' ? acharMsg(K.id) : acharFoto(K.id);
+      var tipo = K.fonte === 'msg' ? 'depoimento' : fonte.tipo;
+      c.prints.push({ id: 'p' + (c.prints.length + 1) + (S.modo === 'demo' ? '' : 'i'), fonte: K.fonte, fonteId: K.id, alunaId: fonte.alunaId, tipo: tipo, formato: K.formato, url: K.previa, status: 'aguardando', criadoEm: Date.now(), nota: '' });
+      S.assinatura = K.assinatura;
+      registrar('Criou print para aprovação', TIPOS_PRINT[tipo] + ' · ' + P.prints.FORMATOS[K.formato].nome);
+      S.compositor = null;
+      fecharModal();
+      S.aba = 'prints'; S.subPrints = 'aguardando';
+      avisar('Print enviado para aprovação.');
+      render();
+    },
+    'ver-print': function (b) {
+      var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
+      abrirModal('<div class="modal-caixa modal-ver" role="dialog" aria-modal="true" aria-label="Print em tamanho maior"><div class="card-topo"><h2>' + esc(TIPOS_PRINT[p.tipo]) + '</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div><img src="' + p.url + '" alt="Print em tamanho maior"></div>');
+    },
+    'fechar-modal': function () { fecharModal(); },
+    'print-aprovar': function (b) {
+      if (!pode('admin')) return;
+      var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
+      if (!printValido(p)) return;
+      p.status = 'aprovado'; p.aprovadoPor = PAPEIS[S.papel].nome === 'Administração' ? S.equipe[0] : PAPEIS[S.papel].nome; p.aprovadoEm = Date.now(); p.nota = '';
+      registrar('Aprovou print', p.id + ' · ' + TIPOS_PRINT[p.tipo]);
+      avisar('Print aprovado.');
+      render();
+    },
+    'print-ajuste': function (b) {
+      if (!pode('admin')) return;
+      var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
+      var nota = (document.getElementById('nota-' + p.id) || {}).value || '';
+      p.status = 'ajuste'; p.nota = nota.trim() || 'Sem detalhe';
+      registrar('Pediu ajuste no print', p.id + ': ' + p.nota);
+      render();
+    },
+    'print-baixar': function (b) {
       if (!pode('exportar')) return;
-      var f = acharFoto(b.dataset.id);
-      registrar('Baixou cópia tratada', 'Foto ' + f.id);
-      fetch(f.derivada).then(function (r) { return r.blob(); }).then(function (bl) { U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'copia-tratada-' + f.id + '.png', bl); });
+      var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
+      if (!printValido(p) || p.status !== 'aprovado') return;
+      registrar('Baixou print', p.id);
+      U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + nomeArquivoPrint(p), blobDeDataURL(p.url));
     },
-    'pronta-divulgacao': function (b) {
+    'print-descartar': function (b) {
       if (!pode('editar')) return;
-      var f = acharFoto(b.dataset.id);
-      f.prontaDivulgacao = !f.prontaDivulgacao;
-      registrar(f.prontaDivulgacao ? 'Marcou foto como pronta para divulgação' : 'Desmarcou foto para divulgação', 'Foto ' + f.id);
+      var c = conj();
+      c.prints = c.prints.filter(function (x) { return x.id !== b.dataset.id; });
+      registrar('Descartou print', b.dataset.id + ' (a foto ou o depoimento de origem continuam guardados)');
       render();
     },
+    'pacote-drive': function () { if (pode('exportar')) baixarPacote(); },
+    'ir-fotos': function () { S.aba = 'resultados'; S.subRes = 'fotos'; render(); window.scrollTo(0, 0); },
+    'conv-mostrar': function (b) { S.conv.mostrar = b.dataset.v; render(); },
     'foto-adicionar': function () {
-      var inp = document.getElementById('foto-arquivo');
-      var file = inp && inp.files[0];
-      if (!file) { avisar('Escolha um arquivo de imagem primeiro.'); return; }
-      var fr = new FileReader();
-      fr.onload = function () {
+      if (!pode('editar')) return;
+      var fa = document.getElementById('foto-antes').files[0], fd = document.getElementById('foto-depois').files[0];
+      if (!fa) { avisar('Escolha pelo menos a foto de antes (ou o print da conversa).'); return; }
+      function ler(file) { return new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.readAsDataURL(file); }); }
+      Promise.all([ler(fa), fd ? ler(fd) : Promise.resolve(null)]).then(function (r) {
         var c = S.dados.import;
         var id = 'if' + (c.midias.length + 1);
-        c.midias.push({ id: id, origem: 'import', alunaId: document.getElementById('foto-aluna').value, descricao: document.getElementById('foto-desc').value || file.name, data: Date.now(), original: fr.result, ocultarRosto: true, derivada: null, derivadaInfo: null, prontaDivulgacao: false, aut: { status: 'nao_solicitada', confirmadoPor: '', data: null } });
-        registrar('Adicionou foto', id + ' (só na memória da aba)');
+        c.midias.push({ id: id, origem: 'import', tipo: r[1] ? 'antes_depois' : 'print_conversa', alunaId: document.getElementById('foto-aluna').value,
+          descricao: document.getElementById('foto-desc').value || fa.name, data: Date.now(), fotos: { antes: r[0], depois: r[1] },
+          tratadas: { antes: null, depois: null }, tratadaInfo: {}, ocultarRosto: true, aut: { status: 'nao_solicitada', confirmadoPor: '', data: null } });
+        registrar('Adicionou ' + (r[1] ? 'antes e depois' : 'print de conversa'), id + ' (só na memória da aba)');
         render();
-      };
-      fr.readAsDataURL(file);
+      });
     },
     'rel-html': function () {
       if (!pode('exportar')) return;
@@ -1181,7 +1463,7 @@
     'imp-limpar-pedir': function () { S.confirmarLimpeza = true; render(); },
     'imp-limpar-cancelar': function () { S.confirmarLimpeza = false; render(); },
     'imp-limpar': function () {
-      S.dados.import = { alunas: {}, mensagens: [], midias: [] };
+      S.dados.import = { alunas: {}, mensagens: [], midias: [], prints: [] };
       S.confirmarLimpeza = false;
       registrar('Apagou dados importados', 'Memória da aba');
       avisar('Dados importados apagados desta aba.');
@@ -1286,7 +1568,15 @@
     'imp-arquivo': function (el) { if (el.files[0]) lerArquivoImportacao(el.files[0]); },
     'imp-equipe': function (el) { S.impPrevia.equipe[el.dataset.nome] = el.checked; },
     'ocultar-rosto': function (el) { if (!pode('editar')) return; var f = acharFoto(el.dataset.id); f.ocultarRosto = el.checked; registrar('Alterou exigência de rosto oculto', 'Foto ' + f.id + ': ' + (el.checked ? 'sim' : 'não')); render(); },
-    'ed-bloco': function (el) { S.editor.bloco = +el.value; S.editor.previa = null; renderEditor(); }
+    'ed-bloco': function (el) { S.editor.bloco = +el.value; S.editor.previa = null; renderEditor(); },
+    cp: function (el) {
+      var K = S.compositor;
+      K[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.dataset.k === 'formato') K.layout = el.value === 'stories' ? 'empilhado' : K.layout;
+      gerarPrint();
+      renderCompositor();
+    },
+    'conv-sem': function (el) { S.conv.semResposta = el.checked; render(); }
   };
 
   document.addEventListener('click', function (e) {
@@ -1310,7 +1600,8 @@
     tBusca = setTimeout(renderListaMensagens, 150);
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && S.editor) { S.editor = null; renderEditor(); }
+    if (e.key !== 'Escape') return;
+    S.editor = null; S.compositor = null; fecharModal();
   });
   var tResize;
   window.addEventListener('resize', function () { clearTimeout(tResize); tResize = setTimeout(desenharGrafico, 120); });
@@ -1318,6 +1609,23 @@
   /* ---------- início ---------- */
 
   S.dados.demo = P.demo.gerar(S.temas, S.equipe);
-  if (/^#(visao|resumo|dores|resultados|ideias|ajuda|mensagens|relatorios|importar|config)$/.test(location.hash)) S.aba = location.hash.slice(1);
+
+  // Prints de exemplo (fictícios): um aguardando aprovação e um aprovado, feitos com as cópias de rosto oculto.
+  (function () {
+    var d = S.dados.demo, PR = P.prints;
+    var fontes = d.midias.filter(function (f) { return autValida(f.aut) && f.tratadas.antes && f.tratadas.depois; });
+    var depo = d.mensagens.find(function (m) { return m.tipo === 'depoimento' && prontoDivulgacao(m); });
+    if (depo) d.prints.push({ id: 'p1', fonte: 'msg', fonteId: depo.id, alunaId: depo.alunaId, tipo: 'depoimento', formato: 'feed', url: PR.cardDepoimento({ formato: 'feed', texto: PRIV.mascararTexto(depo.texto, d.alunas), atribuicao: 'Aluna do programa', fundo: 'rosa' }), status: 'aguardando', criadoEm: Date.now() - 3600000, nota: '' });
+    Promise.all(fontes.map(function (f) { return Promise.all([PR.carregar(f.tratadas.antes), PR.carregar(f.tratadas.depois)]); })).then(function (pares) {
+      pares.forEach(function (im, i) {
+        var f = fontes[i];
+        d.prints.push({ id: 'p' + (d.prints.length + 1), fonte: 'midia', fonteId: f.id, alunaId: f.alunaId, tipo: 'antes_depois', formato: i ? 'stories' : 'feed',
+          url: PR.antesDepois({ formato: i ? 'stories' : 'feed', layout: i ? 'empilhado' : 'lado', antes: im[0], depois: im[1], rotulos: true, periodo: f.descricao, fundo: 'claro' }),
+          status: i ? 'aprovado' : 'aguardando', criadoEm: Date.now() - (i + 2) * 3600000, aprovadoPor: i ? S.equipe[0] : null, aprovadoEm: i ? Date.now() - 1800000 : null, nota: '' });
+      });
+      render();
+    });
+  })();
+  if (/^#(visao|dia|dores|resultados|prints|ideias|ajuda|mensagens|relatorios|importar|config)$/.test(location.hash)) S.aba = location.hash.slice(1);
   render();
 })(window.Painel);

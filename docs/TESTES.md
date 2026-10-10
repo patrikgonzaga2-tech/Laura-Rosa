@@ -16,6 +16,21 @@ Marque cada item ao conferir. Os itens com (auto) também foram verificados auto
 - [ ] A busca encontra "televisão", "marmita", "glúteo" e o código "A-012"
 - [ ] Em "Mensagens e revisão", as objeções detectadas aparecem como etiqueta
 
+## Conversas do dia
+- [ ] Mostra o assunto do dia, quem perguntou (primeiro nome + código), a pergunta e a resposta da equipe com o horário (auto)
+- [ ] Telegram importado: a resposta vem do "responder" da mensagem (auto)
+- [ ] WhatsApp importado: a resposta é a primeira mensagem da equipe depois da pergunta, marcada como "ligação estimada" (auto)
+- [ ] "Só as que não têm resposta registrada" filtra a lista
+
+## Prints para o Instagram
+- [ ] "Criar print" só fica ativo com autorização para divulgação, quem confirmou e cópia com rosto oculto, quando exigido (auto)
+- [ ] O montador gera a prévia nos formatos feed, stories e quadrado e envia para aprovação (auto)
+- [ ] Só a função Administração aprova ou pede ajuste (auto)
+- [ ] Se a autorização da aluna for retirada depois, o print aparece como "não usar" e sai do pacote
+- [ ] "Baixar pacote dos aprovados (.zip)" gera `Instagram/AAAA-MM/` com os PNGs e o `LEIA-ME.txt` sem dados pessoais (auto)
+- [ ] "Enviar ao Drive" aparece desativado até a integração ser configurada
+- [ ] Em "Importados", "Adicionar" aceita antes e depois (2 fotos) ou print de conversa (1 imagem), e "Ocultar rosto ou dados" funciona nos dois
+
 ## Dores e objeções
 - [ ] "Objeções" mostra um cartão por objeção com exemplos, dia da semana em que mais aparece, "como quebrar" e prova social (auto)
 - [ ] "Dores por assunto" agrupa dúvidas, dificuldades e queixas com as frases mais repetidas (auto)

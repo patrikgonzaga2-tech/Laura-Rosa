@@ -13,7 +13,9 @@
 |---|---|---|
 | Painéis, dores, objeções, ideias | Código da aluna (e primeiro nome para quem edita) e texto sem telefone, e-mail, @ e sobrenome | Todas as funções |
 | "Alunas que pedem um olhar" e "Convidar para antes e depois" | Sinais automáticos por aluna. Uso interno | Todas as funções (primeiro nome só para quem edita) |
-| Relatórios exportados | Sem nome, sem código, sem contato | Exportação, Administração |
+| Conversas do dia | Quem perguntou (primeiro nome para quem edita), a pergunta e a resposta da equipe | Todas as funções (primeiro nome só para quem edita) |
+| Relatórios exportados | Sem nome, sem código, sem contato. Nomes citados nas respostas da equipe viram "[nome]" | Exportação, Administração |
+| Prints para o Instagram | Só material com autorização para divulgação. Rosto oculto quando exigido. Aprovação obrigatória. Se a autorização for retirada, o print é bloqueado | Criar: Edição. Aprovar: Administração. Baixar: Exportação |
 | Material de divulgação | Só itens com autorização "para divulgação" + quem confirmou + revisão humana | Exportação, Administração |
 | Fotos originais | Acesso restrito. Nunca alteradas | Edição, Administração |
 | Cópias tratadas | Rosto ou detalhes desfocados. Prévia antes de salvar | Conforme autorização |
