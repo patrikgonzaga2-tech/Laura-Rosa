@@ -46,6 +46,14 @@ Marque cada item ao conferir. Os itens com (auto) também foram verificados auto
 - [ ] Em "Importados", "Adicionar foto" aceita uma imagem que fica só na aba
 - [ ] Na função Leitura, a foto original aparece como "acesso restrito"
 
+## Pauta de conteúdo e necessidades
+- [ ] Relatórios → "Pauta de conteúdo e necessidades" mostra: em poucas palavras, pauta sugerida (até 6), perguntas que se repetem, bloqueios de mentalidade, o que está crescendo, prova social por objeção, melhorias na entrega e limites (auto)
+- [ ] Perguntas com palavras diferentes e o mesmo sentido aparecem agrupadas ("Também escrevem…") (auto)
+- [ ] Na prova social, só aparece texto de relato revisado, autorizado para divulgação e com quem confirmou
+- [ ] Mudar o "Tipo" de um assunto em Configurações (ex.: de "Vira conteúdo" para "Ajuste na entrega") tira o assunto da pauta e o leva para "Melhorias na entrega"
+- [ ] Editar o "Ângulo do seu método" muda o texto na pauta
+- [ ] Resumo do dia → "Alunas que pedem um olhar mais próximo" lista sinais e não aparece no resumo copiado nem nos relatórios (auto)
+
 ## Exportações
 - [ ] "Baixar planilha (.csv)" abre no Excel com acentos corretos (auto)
 - [ ] "Baixar relatório (.html)" abre no navegador e pode ser salvo como PDF por "Imprimir"

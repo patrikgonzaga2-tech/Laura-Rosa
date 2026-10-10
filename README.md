@@ -2,6 +2,8 @@
 
 Protótipo de painel para organizar o suporte das alunas (WhatsApp de suporte e grupo de acompanhamento no Telegram): dúvidas frequentes, queixas e dificuldades, fila de respostas, depoimentos, relatos de evolução e fotos de antes e depois com controle de autorização.
 
+O relatório principal é a **Pauta de conteúdo e necessidades das alunas**. Ela transforma as mensagens em pauta para o Instagram (com o ângulo do seu método), perguntas que se repetem, bloqueios de mentalidade, provas sociais autorizadas e melhorias na entrega. Veja um exemplo com dados fictícios em `exemplos/relatorio-pauta-ficticio.html`.
+
 > **Estado atual: protótipo (etapa 1).** Funciona inteiro no navegador, sem servidor.
 > - Os dados que aparecem ao abrir são **fictícios** e identificados como tal.
 > - É possível **importar manualmente** conversas exportadas do WhatsApp (.txt), do Telegram (.json) ou de uma planilha (.csv). Esses dados ficam só na memória da aba e somem ao recarregar.

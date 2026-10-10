@@ -42,7 +42,7 @@
     { id: 'dificuldade', nome: 'Dificuldades' },
     { id: 'depoimento', nome: 'Depoimentos positivos' },
     { id: 'evolucao', nome: 'Relatos de evolução' },
-    { id: 'ideias', nome: 'Ideias de conteúdo' }
+    { id: 'ideias', nome: 'Pauta de conteúdo' }
   ];
 
   var S = {
@@ -61,7 +61,7 @@
     diaResumo: '',
     fila: { status: 'abertos', prioridade: '', responsavel: '' },
     contatos: {},
-    rel: { tipo: 'interno', soRevisadas: true, secoes: { numeros: true, temas: true, queixas: true, depoimentos: true, pendencias: true } },
+    rel: { tipo: 'pauta', soRevisadas: true, secoes: { numeros: true, temas: true, queixas: true, depoimentos: true, pendencias: true } },
     impOrigem: 'whatsapp',
     impCanal: 'whatsapp',
     impPrevia: null,
@@ -348,7 +348,7 @@
         return '<li>' + prioPill(m.acomp.prioridade) + ' <span class="lc-texto">' + esc(textoSeguro(m)) + '</span><span class="lc-meta">' + canalTag(m.canal) + ' ' + esc(nomeTema(m.tema)) + ' · ' + U.fmtRel(m.data, Date.now() < ref ? ref : Date.now()) + '</span></li>';
       }).join('') + '</ul>' : '<p class="sub">Nenhuma mensagem pendente com esses filtros.</p>') +
       '</section>';
-    h += '<section class="painel-card"><h2>Ideias de conteúdo a partir das dúvidas</h2>' + blocoIdeias(atual, 3) + '</section></div>';
+    h += '<section class="painel-card"><div class="card-topo"><h2>Ideias de conteúdo a partir das dúvidas</h2><button type="button" class="link" data-acao="ir-pauta-conteudos">Ver pauta completa</button></div>' + blocoIdeias(atual, 3) + '</section></div>';
     return h;
   }
 
@@ -407,7 +407,21 @@
     h += '<div class="duas"><section class="painel-card"><h2>Destaques</h2><ul class="destaques">' + r.destaques.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul></section>';
     h += '<section class="painel-card"><h2>Precisa de atenção</h2>' + (r.atencao.length ? '<ul class="destaques">' + r.atencao.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul>' : '<p class="sub">Nada fora do normal neste dia.</p>') +
       '<button type="button" class="link" data-acao="aba" data-v="fila">Abrir fila de acompanhamento</button></section></div>';
+    h += blocoSinais(dia);
     return h;
+  }
+
+  // Alunas que pedem um olhar mais próximo (uso interno; nunca vai para relatórios).
+  function blocoSinais(dia) {
+    var sinais = P.pauta.sinaisAlunas(msgsAlunas(), S.temas, U.fimDia(dia));
+    var h = '<section class="painel-card"><div class="card-topo"><h2>Alunas que pedem um olhar mais próximo</h2><span class="chip chip-auto">Sinal automático, confirme antes de agir</span></div>' +
+      '<p class="sub">Quem trouxe várias dificuldades na última semana ou parou de escrever. Uso interno: não entra em relatórios nem no resumo copiado.</p>';
+    if (!sinais.length) return h + '<p class="sub">Nenhum sinal neste dia.</p></section>';
+    return h + '<ul class="sinais">' + sinais.slice(0, 12).map(function (x) {
+      return '<li class="sinal-' + x.tipo + '"><span class="sinal-tag">' + (x.tipo === 'bloqueio' ? 'Dificuldade repetida' : 'Sumiu') + '</span>' +
+        '<span class="item-quem">' + esc(rotuloAluna(x.alunaId)) + '</span><span class="sub">' + esc(x.motivo) + '</span>' +
+        (x.ultima ? '<span class="lc-texto">Última mensagem (' + U.fmtData(x.ultima.data) + '): ' + esc(textoSeguro(x.ultima)) + '</span>' : '') + '</li>';
+    }).join('') + '</ul>' + (sinais.length > 12 ? '<p class="sub">+' + (sinais.length - 12) + ' outras.</p>' : '') + '</section>';
   }
 
   function calcularResumo(dia) {
@@ -566,7 +580,11 @@
       return '<button type="button" role="tab" data-acao="sub" data-v="' + s.id + '" aria-selected="' + (S.sub === s.id) + '">' + esc(s.nome) + n + '</button>';
     }).join('') + '<button type="button" data-acao="aba" data-v="fotos">Antes e depois →</button></div>';
 
-    if (S.sub === 'ideias') return h + '<section class="painel-card">' + blocoIdeias(lista, 8) + '</section>';
+    if (S.sub === 'ideias') {
+      var pa = construirPauta(lista, filtrar(msgsAlunas(), intervaloAnterior(iv)));
+      return h + '<p class="nota">Pauta gerada a partir das mensagens do período (' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + '). Para exportar e compartilhar com a equipe, use <button type="button" class="link" data-acao="ir-pauta">Relatórios → Pauta de conteúdo</button>.</p>' +
+        '<section class="painel-card relatorio">' + pa.html + '</section>';
+    }
 
     var doTipo = lista.filter(function (m) { return m.tipo === S.sub; });
     if (!doTipo.length) return h + vazio('Nada neste período', 'Mude o período ou os filtros para ver mais.');
@@ -593,6 +611,18 @@
         (prontoDivulgacao(m) ? '<span class="chip chip-pronto">Pode entrar no relatório de divulgação</span>' : '') + '</div>' +
         formAut('msg', m) + '</article>';
     }).join('') + '</div>';
+  }
+
+  function atrasadosAgora() {
+    var limite = Date.now() - 86400000;
+    return msgsAlunas().filter(function (m) { return m.acomp && m.acomp.status === 'pendente' && m.data < limite && passaFiltros(m, { ignorarStatus: true }); }).length;
+  }
+
+  function construirPauta(lista, anterior) {
+    return P.pauta.construir({
+      lista: lista, anterior: anterior, temas: S.temas,
+      textoSeguro: textoSeguro, nomeTema: nomeTema, pronto: prontoDivulgacao, atrasados: atrasadosAgora()
+    });
   }
 
   function prontoDivulgacao(m) { return m.revisado && m.aut && m.aut.status === 'divulgacao' && !!m.aut.confirmadoPor; }
@@ -759,7 +789,7 @@
       return { canal: 'Canal: ' + CANAIS[v], tema: 'Assunto: ' + nomeTema(v), tipo: 'Tipo: ' + nomeTipo(v), autorizacao: 'Autorização: ' + AUT[v], status: 'Acompanhamento: ' + (STATUS[v] || 'Não precisa') }[k];
     });
     var h = [], t = [], csv = [];
-    var titulo = S.rel.tipo === 'interno' ? 'Relatório interno de acompanhamento' : 'Material autorizado para divulgação';
+    var titulo = { pauta: 'Pauta de conteúdo e necessidades das alunas', interno: 'Relatório interno de acompanhamento', divulgacao: 'Material autorizado para divulgação' }[S.rel.tipo];
     if (demo) { h.push('<p class="rel-demo">DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO</p>'); t.push('*** DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO ***'); }
     h.push('<h2>' + titulo + '</h2>');
     var cab = 'Período: ' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + (filtrosTxt.length ? ' · ' + filtrosTxt.join(' · ') : '') + ' · Gerado em ' + U.fmtDataHora(Date.now());
@@ -768,6 +798,13 @@
     var notaRev = S.rel.soRevisadas ? 'Inclui só classificações revisadas por uma pessoa (' + naoRev + ' mensagem(ns) sem revisão ficaram de fora).' : 'Atenção: inclui ' + naoRev + ' classificação(ões) automática(s) ainda não revisada(s).';
     h.push('<p class="rel-meta">' + notaRev + ' Sem nomes, sobrenomes, telefones ou códigos de alunas.</p>');
     t.push(notaRev, '');
+
+    if (S.rel.tipo === 'pauta') {
+      var anteriorRel = filtrar(msgsAlunas(), intervaloAnterior(iv));
+      if (S.rel.soRevisadas) anteriorRel = anteriorRel.filter(function (m) { return m.revisado; });
+      var pa = construirPauta(lista, anteriorRel);
+      return { html: h.join('') + pa.html, texto: t.join('\n') + '\n' + pa.texto, csv: pa.csv };
+    }
 
     if (S.rel.tipo === 'divulgacao') {
       var ok = base.filter(prontoDivulgacao);
@@ -855,7 +892,7 @@
     var sec = S.rel.secoes;
     var h = '<div class="cabeca-aba"><h1>Relatórios</h1><p class="sub">Usa os filtros do topo. Nenhum relatório traz nome completo, sobrenome, telefone ou código de aluna.</p></div>';
     h += '<div class="linha-controles">' +
-      '<label class="campo"><span>Tipo de relatório</span><select id="rel-tipo" data-mudar="rel-tipo">' + opcoes({ interno: 'Interno da equipe (anonimizado)', divulgacao: 'Divulgação (somente autorizados)' }, S.rel.tipo) + '</select></label>' +
+      '<label class="campo campo-largo"><span>Tipo de relatório</span><select id="rel-tipo" data-mudar="rel-tipo">' + opcoes({ pauta: 'Pauta de conteúdo e necessidades', interno: 'Interno da equipe (números)', divulgacao: 'Divulgação (somente autorizados)' }, S.rel.tipo) + '</select></label>' +
       '<label class="check"><input type="checkbox" id="rel-rev" data-mudar="rel-rev"' + (S.rel.soRevisadas ? ' checked' : '') + '> Só classificações revisadas</label>' +
       '</div>';
     if (S.rel.tipo === 'interno') {
@@ -992,12 +1029,15 @@
     var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, equipe, permissões e registro de ações. Neste protótipo tudo fica só nesta aba.</p></div>';
     h += '<section class="painel-card"><h2>Assuntos (categorias)</h2><p class="sub">Palavras-chave alimentam a classificação automática. Mudanças valem para novas classificações. Mensagens já revisadas por uma pessoa não são alteradas.</p>';
     if (!adm) h += semPermissao('editar assuntos');
-    h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Assunto</th><th>Palavras-chave (separe por vírgula)</th><th>Ideia de conteúdo</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
+    var NATUREZAS = { conteudo: 'Vira conteúdo', mentalidade: 'Bloqueio de mentalidade', entrega: 'Ajuste na entrega', prova: 'Prova social' };
+    h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Assunto</th><th>Tipo</th><th>Palavras-chave (separe por vírgula)</th><th>Ideia de conteúdo</th><th>Ângulo do seu método (ou ação, se for entrega)</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
       S.temas.map(function (t) {
         var dis = adm && !t.fixo ? '' : ' disabled';
         return '<tr><td><input type="text" id="tn-' + t.id + '" value="' + esc(t.nome) + '" aria-label="Nome do assunto"' + dis + '></td>' +
+          '<td><select id="tz-' + t.id + '" aria-label="Tipo do assunto"' + dis + '>' + opcoes(NATUREZAS, t.natureza || 'conteudo') + '</select></td>' +
           '<td><textarea id="tp-' + t.id + '" rows="2" aria-label="Palavras-chave"' + dis + '>' + esc(t.palavras.join(', ')) + '</textarea></td>' +
           '<td><textarea id="ti-' + t.id + '" rows="2" aria-label="Ideia de conteúdo"' + dis + '>' + esc(t.ideia) + '</textarea></td>' +
+          '<td><textarea id="ta-' + t.id + '" rows="2" aria-label="Ângulo do método ou ação"' + dis + '>' + esc((t.natureza === 'entrega' ? t.acao : t.angulo) || '') + '</textarea></td>' +
           (adm ? '<td class="acoes-celula">' + (t.fixo ? '<span class="sub">fixo</span>' : '<button type="button" class="btn btn-sec btn-peq" data-acao="tema-salvar" data-id="' + t.id + '">Salvar</button><button type="button" class="btn btn-sec btn-peq" data-acao="tema-remover" data-id="' + t.id + '">Remover</button>') + '</td>' : '') + '</tr>';
       }).join('') + '</tbody></table></div>';
     if (adm) h += '<div class="linha-controles"><label class="campo"><span>Novo assunto</span><input type="text" id="tema-novo" placeholder="Ex.: Sono e descanso"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="tema-adicionar">Adicionar</button></div>' +
@@ -1032,6 +1072,8 @@
     modo: function (b) { if (S.modo === b.dataset.v) { render(); return; } S.modo = b.dataset.v; S.limite = 40; S.contatos = {}; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render(); },
     'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '', status: '' }; render(); },
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
+    'ir-pauta': function () { S.aba = 'relatorios'; S.rel.tipo = 'pauta'; render(); window.scrollTo(0, 0); },
+    'ir-pauta-conteudos': function () { S.aba = 'conteudos'; S.sub = 'ideias'; render(); window.scrollTo(0, 0); },
     'ir-revisao': function () { S.aba = 'mensagens'; S.soNaoRevisadas = true; render(); },
     gran: function (b) { S.gran = b.dataset.v; render(); },
     mais: function () { S.limite += 40; if (S.aba === 'mensagens') renderListaMensagens(); else render(); },
@@ -1119,14 +1161,14 @@
       if (!pode('exportar')) return;
       var r = construirRelatorio();
       var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório</title><style>body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;color:#1f1a1d}h2,h3{line-height:1.2}table{border-collapse:collapse;width:100%;margin:.5rem 0 1rem}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left}.rel-demo{background:#fff1c2;border:2px dashed #8a6500;padding:.5rem;font-weight:700;text-align:center}.rel-meta{color:#5b5157;font-size:.9em}q{font-style:italic}</style></head><body>' + r.html + '</body></html>';
-      registrar('Exportou relatório (.html)', S.rel.tipo === 'interno' ? 'Interno' : 'Divulgação');
+      registrar('Exportou relatório (.html)', S.rel.tipo);
       U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'relatorio-' + U.chaveDia(Date.now()) + '.html', doc, 'text/html');
       render();
     },
     'rel-csv': function () {
       if (!pode('exportar')) return;
       var r = construirRelatorio();
-      registrar('Exportou planilha (.csv)', S.rel.tipo === 'interno' ? 'Interno' : 'Divulgação');
+      registrar('Exportou planilha (.csv)', S.rel.tipo);
       U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'relatorio-' + U.chaveDia(Date.now()) + '.csv', csvTexto(r.csv), 'text/csv');
       render();
     },
@@ -1161,6 +1203,9 @@
       t.nome = document.getElementById('tn-' + t.id).value.trim() || t.nome;
       t.palavras = document.getElementById('tp-' + t.id).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
       t.ideia = document.getElementById('ti-' + t.id).value.trim();
+      t.natureza = document.getElementById('tz-' + t.id).value;
+      if (t.natureza === 'entrega') t.acao = document.getElementById('ta-' + t.id).value.trim();
+      else t.angulo = document.getElementById('ta-' + t.id).value.trim();
       registrar('Editou assunto', t.nome);
       avisar('Assunto salvo.');
       render();
@@ -1180,7 +1225,7 @@
       var nome = document.getElementById('tema-novo').value.trim();
       if (!nome) return;
       var id = 'tema-' + Date.now().toString(36);
-      S.temas.splice(S.temas.length - 1, 0, { id: id, nome: nome, palavras: [], ideia: '' });
+      S.temas.splice(S.temas.length - 1, 0, { id: id, nome: nome, natureza: 'conteudo', palavras: [], ideia: '', angulo: '' });
       registrar('Criou assunto', nome);
       render();
     },

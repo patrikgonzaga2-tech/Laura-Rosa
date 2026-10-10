@@ -324,6 +324,22 @@ blockquote.depo { margin: 0; padding-left: 12px; border-left: 2px solid var(--ac
 .rel-lista { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 6px; }
 .rel-lista span { color: var(--muted); font-size: 0.84rem; }
 
+/* Pauta */
+.pauta { margin: 0; padding-left: 1.4rem; display: flex; flex-direction: column; gap: 14px; }
+.pauta > li::marker { font-family: var(--f-display); font-weight: 700; color: var(--accent-ink); }
+.pauta-topo { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.pauta-campos { margin: 6px 0 0; display: grid; gap: 6px; }
+.pauta-campos div { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 10px; }
+.pauta-campos dt { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+.pauta-campos dd { margin: 0; overflow-wrap: anywhere; }
+.mente { padding: 8px 0 8px 12px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 3px; }
+.rel-tab-texto td { text-align: left; }
+.sinais { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.sinais li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.sinal-tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 4px; }
+.sinal-bloqueio .sinal-tag { background: var(--crit-soft); color: var(--crit); }
+.sinal-sumiu .sinal-tag { background: var(--warn-soft); color: var(--warn-ink); }
+
 /* Importar */
 .passos { margin: 6px 0 4px; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 4px; }
 details summary { cursor: pointer; }
@@ -391,7 +407,7 @@ details summary { cursor: pointer; }
   .kpi-num { font-size: 1.6rem; }
   .item-topo time { margin-left: 0; flex-basis: 100%; }
   .item-acoes .campo, .form-aut .campo, .linha-controles .campo { flex: 1 1 100%; }
-  .restrito dl div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .restrito dl div, .pauta-campos div { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .grupos, .galeria { grid-template-columns: minmax(0, 1fr); }
   .topo-controles { width: 100%; justify-content: space-between; }
 }

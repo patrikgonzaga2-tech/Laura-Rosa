@@ -42,7 +42,8 @@ window.Painel = window.Painel || {};
       { t: 'duvida', x: 'Como coloco os treinos na televisão? Minha TV é smart' },
       { t: 'queixa', x: 'Não consigo acessar a plataforma, diz que a senha tá errada' },
       { t: 'duvida', x: 'Dá pra espelhar o app na TV pelo celular?' },
-      { t: 'queixa', x: 'O vídeo do treino tá travando no aplicativo desde ontem' }
+      { t: 'queixa', x: 'O vídeo do treino tá travando no aplicativo desde ontem' },
+      { t: 'duvida', x: 'Tem como assistir os treinos na TV da sala?' }
     ],
     cafe: [
       { t: 'duvida', x: 'O que posso substituir no café da manhã no lugar do pão?' },
@@ -57,21 +58,25 @@ window.Painel = window.Painel || {};
     gluteo: [
       { t: 'duvida', x: 'Quanto tempo leva pra começar a ver o glúteo crescer?' },
       { t: 'duvida', x: 'Posso fazer o treino de glúteo mais vezes na semana pra crescer mais rápido?' },
-      { t: 'dificuldade', x: 'Não sinto o glúteo trabalhando na elevação pélvica, só a coxa' }
+      { t: 'dificuldade', x: 'Não sinto o glúteo trabalhando na elevação pélvica, só a coxa' },
+      { t: 'duvida', x: 'Em quanto tempo o glúteo começa a crescer?' }
     ],
     barriga: [
       { t: 'duvida', x: 'Como faço pra tirar a gordura da barriga? Abdominal todo dia ajuda?' },
-      { t: 'dificuldade', x: 'Já perdi peso mas a barriga continua, tô ficando frustrada' }
+      { t: 'dificuldade', x: 'Já perdi peso mas a barriga continua, tô ficando frustrada' },
+      { t: 'duvida', x: 'Abdominal todo dia ajuda a perder a barriga?' }
     ],
     motivacao: [
       { t: 'dificuldade', x: 'Hoje acordei totalmente desmotivada, sem vontade nenhuma de treinar' },
       { t: 'dificuldade', x: 'Essa semana tô desanimada, parece que nada tá mudando' },
-      { t: 'duvida', x: 'O que eu faço nos dias que bate a preguiça?' }
+      { t: 'duvida', x: 'O que eu faço nos dias que bate a preguiça?' },
+      { t: 'dificuldade', x: 'Tô sem ânimo nenhum hoje, cansada da semana' }
     ],
     tempo: [
       { t: 'duvida', x: 'Hoje só tenho 15 minutos, qual treino eu faço?' },
       { t: 'dificuldade', x: 'Semana muito corrida, sem tempo nenhum pra treinar' },
-      { t: 'duvida', x: 'Tem algum treino menorzinho pra dias de correria?' }
+      { t: 'duvida', x: 'Tem algum treino menorzinho pra dias de correria?' },
+      { t: 'duvida', x: 'Só consigo 10 minutos hoje, vale a pena treinar?' }
     ],
     objetivo: [
       { t: 'duvida', x: 'Como eu sei qual é o objetivo do treino de hoje pra trocar por um mais curto?' },
@@ -81,20 +86,25 @@ window.Painel = window.Painel || {};
     constancia: [
       { t: 'dificuldade', x: 'Falhei a semana inteira e já pensei em desistir de tudo' },
       { t: 'dificuldade', x: 'Sinto culpa quando não consigo fazer o treino completo' },
-      { t: 'duvida', x: 'Parei duas semanas, como eu recomeço sem me sentir no zero?' }
+      { t: 'duvida', x: 'Parei duas semanas, como eu recomeço sem me sentir no zero?' },
+      { t: 'dificuldade', x: 'Sempre começo animada e paro na segunda semana, não consigo manter' }
     ],
     resultados: [
       { t: 'evolucao', x: 'Perdi 3 kg esse mês e diminuí 4 cm de cintura!' },
       { t: 'evolucao', x: 'A calça jeans que não fechava voltou a servir' },
       { t: 'evolucao', x: 'Primeira vez que fiz o treino inteiro sem parar, tô evoluindo' },
-      { t: 'evolucao', x: 'Mandei as fotos de antes e depois de 60 dias, olha a diferença na barriga' }
+      { t: 'evolucao', x: 'Mandei as fotos de antes e depois de 60 dias, olha a diferença na barriga' },
+      { t: 'evolucao', x: 'Mesmo com a semana corrida fiz os treinos de 15 minutos e perdi 2 kg' },
+      { t: 'evolucao', x: 'Minha barriga diminuiu 5 cm desde que comecei' },
+      { t: 'evolucao', x: 'Parei de querer fazer tudo perfeito e pela primeira vez completei um mês de treinos' }
     ],
     comunidade: [
       { t: 'depoimento', x: 'Amei o acompanhamento, nunca me senti tão acolhida num programa' },
       { t: 'depoimento', x: 'Obrigada pelo apoio de ontem, fez toda diferença pra eu não desistir' },
       { t: 'depoimento', x: 'Esse grupo é a melhor parte do meu dia, a gente se sente junto' },
       { t: 'depoimento', x: 'Aprendi que fazer o treino curto é melhor do que não fazer nada, mudou minha cabeça' },
-      { t: 'queixa', x: 'Mandei mensagem ontem e ninguém respondeu ainda' }
+      { t: 'queixa', x: 'Mandei mensagem ontem e ninguém respondeu ainda' },
+      { t: 'depoimento', x: 'Consegui encaixar o treino antes do trabalho com as dicas do grupo, amei' }
     ]
   };
 
