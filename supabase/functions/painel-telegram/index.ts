@@ -121,6 +121,17 @@ Deno.serve(async (req) => {
           ultimo_erro: w.last_error_message ?? null,
         });
       }
+      if (acao === "grupos") {
+        // Lista grupos com nº de membros. Protegido: só quem tem o segredo do webhook (o próprio banco) consegue chamar.
+        const { tg_webhook_secret } = await cfg();
+        if (u.searchParams.get("chave") !== tg_webhook_secret) return json({ ok: false }, 401);
+        const { data } = await db.from("painel_chats").select("chat_id, titulo, tipo, permitido, bot_status").order("primeira_vez_em");
+        const grupos = await Promise.all((data ?? []).map(async (g: any) => {
+          const n = await tg("getChatMemberCount", { chat_id: g.chat_id });
+          return { ...g, membros: n.ok ? n.result : null, acessivel: !!n.ok };
+        }));
+        return json({ ok: true, grupos });
+      }
       return json({ ok: false, erro: "ação desconhecida" }, 400);
     }
 
@@ -138,6 +149,11 @@ Deno.serve(async (req) => {
     if (!msg) return json({ ok: true });
     const chat = msg.chat;
     if (chat.type !== "group" && chat.type !== "supergroup") return json({ ok: true }); // conversa privada com o bot: ignora
+    if (msg.migrate_to_chat_id) {
+      // O grupo virou supergrupo e ganhou outro número: o antigo deixa de ser usado.
+      await db.from("painel_chats").update({ bot_status: "migrado", permitido: false }).eq("chat_id", String(chat.id));
+      return json({ ok: true });
+    }
     const c = await registrarChat(chat);
     if (!c.permitido) return json({ ok: true });
 
