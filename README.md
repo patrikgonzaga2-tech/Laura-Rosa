@@ -6,6 +6,7 @@ Painel que organiza as conversas que já acontecem no WhatsApp de suporte e no g
 - **Dores e objeções:** o que trava as alunas, nas palavras delas, e como quebrar com o seu método.
 - **Antes e depois e resultados:** relatos, depoimentos e fotos, com registro de autorização e ideias de antes e depois.
 - **Prints para o Instagram:** monta o print (antes e depois, card de depoimento ou print de conversa) só com material autorizado. Você aprova, e os aprovados vão em um pacote para o Drive da social media.
+- **Visão geral personalizável:** alertas "Pede atenção agora", indicadores com tendência, gráfico com escolha de métrica, "Personalizar painel", "Salvar visualização", "Redefinir" e "Atualizar dados".
 - **Ideias de conteúdo e Como ajudar mais:** pauta com o ângulo do seu método, a resposta que você já deu e sugestões para cuidar melhor das alunas.
 
 O relatório principal é a **Pauta de conteúdo e necessidades das alunas**. Ela transforma as mensagens em pauta para o Instagram (com o ângulo do seu método), perguntas que se repetem, bloqueios de mentalidade, provas sociais autorizadas e melhorias na entrega. Veja um exemplo com dados fictícios em `exemplos/relatorio-pauta-ficticio.html`.

@@ -13,11 +13,13 @@
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
 <header class="topo">
+  <button type="button" class="menu-btn" id="menu-btn" data-acao="menu" aria-expanded="false" aria-controls="nav"><span aria-hidden="true">☰</span> <span class="menu-atual">Menu</span></button>
   <div class="marca">
     <span class="marca-titulo">Acompanhamento das Alunas</span>
-    <span class="marca-sub">WhatsApp de suporte · Grupo do Telegram</span>
+    <span class="marca-sub" id="status-dados" aria-live="polite"></span>
   </div>
   <div class="topo-controles">
+    <button type="button" class="btn btn-sec btn-peq" data-acao="atualizar" title="Mostra até quando vão os dados, recalcula as análises e leva para importar o arquivo mais novo">Atualizar dados</button>
     <div class="seg" role="group" aria-label="Fonte dos dados">
       <button type="button" data-acao="modo" data-v="demo" aria-pressed="true">Exemplo fictício</button>
       <button type="button" data-acao="modo" data-v="import" aria-pressed="false">Importados</button>
@@ -25,7 +27,7 @@
     <label class="papel"><span>Ver como</span>
       <select id="papel" data-mudar="papel">
         <option value="leitura">Leitura</option>
-        <option value="edicao">Suporte (edição)</option>
+        <option value="edicao">Edição</option>
         <option value="exportacao">Exportação</option>
         <option value="admin" selected>Administração</option>
       </select>

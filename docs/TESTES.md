@@ -9,8 +9,20 @@ Marque cada item ao conferir. Os itens com (auto) também foram verificados auto
 - [ ] Ao recarregar a página, os dados importados somem
 - [ ] Nenhuma tela mostra telefone. Números citados no texto aparecem como "[telefone oculto]" (auto)
 
+## Navegação, atualização e personalização
+- [ ] O menu aparece agrupado (Acompanhar, Entender, Criar, Cuidar, Dados). No celular fica atrás do botão "Menu" (auto)
+- [ ] O endereço muda ao trocar de tela (ex.: `#dia`), e o botão voltar do navegador funciona (auto)
+- [ ] O topo mostra "mensagens até …" e "análises às …" (auto)
+- [ ] "Atualizar dados" mostra a situação, "Recalcular análises" refaz as classificações não revisadas e "Importar arquivo mais recente" leva para Importar (auto)
+- [ ] "Personalizar painel": adicionar, remover e reordenar indicadores; mostrar, ocultar e reordenar seções; período e métrica ao abrir (auto)
+- [ ] "Salvar visualização" com "Abrir sempre" reabre igual depois de recarregar (auto). Em janela anônima, o painel avisa que não conseguiu salvar
+- [ ] "Redefinir" volta ao padrão sem apagar as visualizações salvas (auto)
+- [ ] "Pede atenção agora" só mostra alertas com dados, e cada link leva à tela certa (auto)
+- [ ] Os indicadores mostram unidade, variação com "melhorou/piorou" quando faz sentido e tendência (auto)
+
 ## Filtros e busca
-- [ ] Período (7, 14, 30, 60 dias, "Tudo", "Escolher datas") muda números, gráfico e análises
+- [ ] Os botões de período (7, 14, 30, 60 dias, Tudo, Escolher datas) mudam números, gráfico e análises (auto)
+- [ ] Filtros ativos aparecem como etiquetas removíveis em todas as telas que usam filtro, inclusive Conversas do dia (auto)
 - [ ] Canal, Assunto, Tipo e Autorização filtram todas as telas com filtro
 - [ ] Tocar em um assunto em "Assuntos recorrentes" aplica o filtro
 - [ ] A busca encontra "televisão", "marmita", "glúteo" e o código "A-012"

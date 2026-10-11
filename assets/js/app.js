@@ -29,17 +29,17 @@
   };
   var NATUREZAS = { conteudo: 'Vira conteúdo', mentalidade: 'Bloqueio de mentalidade', entrega: 'Ajuste na entrega', prova: 'Prova social' };
   var ABAS = [
-    { id: 'visao', nome: 'Visão geral' },
-    { id: 'dia', nome: 'Conversas do dia' },
-    { id: 'dores', nome: 'Dores e objeções' },
-    { id: 'resultados', nome: 'Antes e depois e resultados' },
-    { id: 'prints', nome: 'Prints para o Instagram' },
-    { id: 'ideias', nome: 'Ideias de conteúdo' },
-    { id: 'ajuda', nome: 'Como ajudar mais' },
-    { id: 'mensagens', nome: 'Mensagens e revisão' },
-    { id: 'relatorios', nome: 'Relatórios' },
-    { id: 'importar', nome: 'Importar' },
-    { id: 'config', nome: 'Configurações' }
+    { id: 'visao', nome: 'Visão geral', grupo: 'Acompanhar' },
+    { id: 'dia', nome: 'Conversas do dia', grupo: 'Acompanhar' },
+    { id: 'dores', nome: 'Dores e objeções', grupo: 'Entender' },
+    { id: 'resultados', nome: 'Resultados e antes e depois', grupo: 'Entender' },
+    { id: 'ideias', nome: 'Ideias de conteúdo', grupo: 'Criar' },
+    { id: 'prints', nome: 'Prints para o Instagram', grupo: 'Criar' },
+    { id: 'ajuda', nome: 'Como ajudar mais', grupo: 'Cuidar' },
+    { id: 'mensagens', nome: 'Mensagens e revisão', grupo: 'Dados' },
+    { id: 'importar', nome: 'Importar dados', grupo: 'Dados' },
+    { id: 'relatorios', nome: 'Relatórios', grupo: 'Dados' },
+    { id: 'config', nome: 'Configurações', grupo: '' }
   ];
 
   var S = {
@@ -52,7 +52,7 @@
     objecoes: A.objecoesPadrao(),
     resultados: A.resultadosPadrao(),
     equipe: ['Coordenação', 'Equipe 1', 'Equipe 2'],
-    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [] } },
+    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] } },
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
     soNaoRevisadas: false,
@@ -69,7 +69,16 @@
     seqImport: 0,
     auditoria: [],
     editor: null,
-    confirmarLimpeza: false
+    confirmarLimpeza: false,
+    prefs: null,
+    visAtual: '',
+    menuAberto: false,
+    filtrosAbertos: false,
+    calculadoEm: Date.now(),
+    verTodosAssuntos: false,
+    confirmarRedefinir: false,
+    modalAtivo: '',
+    soSemResposta: false
   };
 
   /* ---------- acesso aos dados ---------- */
@@ -164,6 +173,144 @@
     return { iv: iv, lista: filtrar(msgsAlunas(), iv), r: analisar(filtrar(msgsAlunas(), iv), filtrar(msgsAlunas(), intervaloAnterior(iv)), iv) };
   }
 
+  /* ---------- Indicadores e preferências ---------- */
+
+  // Só indicadores que dá para calcular com os dados existentes.
+  // sentido: 'ruim' (subir é pior), 'bom' (subir é melhor) ou 'neutro'.
+  var INDICADORES = {
+    msgs: { nome: 'Mensagens das alunas', un: 'mensagens', sentido: 'neutro', conta: function () { return true; }, desc: 'Tudo o que as alunas escreveram no período (sem a equipe).' },
+    duvidas: { nome: 'Dúvidas', un: 'mensagens', sentido: 'neutro', conta: function (m) { return m.tipo === 'duvida'; }, desc: 'Mensagens classificadas como dúvida.' },
+    dores: { nome: 'Queixas e dificuldades', un: 'mensagens', sentido: 'ruim', conta: function (m) { return m.tipo === 'queixa' || m.tipo === 'dificuldade'; }, desc: 'O que trava ou incomoda as alunas.' },
+    queixas: { nome: 'Queixas', un: 'mensagens', sentido: 'ruim', conta: function (m) { return m.tipo === 'queixa'; }, desc: 'Reclamações sobre acesso, atendimento ou programa.' },
+    objecoes: { nome: 'Mensagens com objeção', un: 'mensagens', sentido: 'ruim', conta: function (m) { return !ehProva(m) && A.detectar(m.texto, S.objecoes).length > 0; }, desc: 'Mensagens com alguma das objeções cadastradas em Configurações.' },
+    depoimentos: { nome: 'Depoimentos positivos', un: 'mensagens', sentido: 'bom', conta: function (m) { return m.tipo === 'depoimento'; }, desc: 'Elogios e relatos de experiência na comunidade.' },
+    evolucao: { nome: 'Relatos de evolução', un: 'mensagens', sentido: 'bom', conta: function (m) { return m.tipo === 'evolucao'; }, desc: 'Resultados contados pelas alunas.' },
+    semResposta: { nome: 'Perguntas sem resposta registrada', un: 'mensagens', sentido: 'ruim', conta: function (m) { return ehDor(m) && !m.resposta; }, desc: 'Dúvidas, dificuldades e queixas sem resposta da equipe nos arquivos importados.' },
+    naoRevisadas: { nome: 'Classificações sem revisão', un: 'mensagens', sentido: 'ruim', conta: function (m) { return !m.revisado; }, desc: 'Mensagens que ainda têm só a sugestão automática.' },
+    autorizados: { nome: 'Relatos autorizados para divulgação', un: 'mensagens', sentido: 'bom', conta: prontoDivulgacao, desc: 'Depoimentos e relatos revisados, com autorização e quem confirmou.' },
+    alunas: { nome: 'Alunas que escreveram', un: 'alunas', sentido: 'neutro', desc: 'Pessoas diferentes que mandaram mensagem no período.',
+      calc: function (l) { var s = {}; l.forEach(function (m) { if (m.alunaId) s[m.alunaId] = 1; }); return Object.keys(s).length; } },
+    taxaResposta: { nome: 'Perguntas com resposta registrada', un: '%', sentido: 'bom', desc: 'Parte das dúvidas, dificuldades e queixas que têm resposta da equipe nos arquivos.',
+      calc: function (l) { var d = l.filter(ehDor); return d.length ? Math.round(100 * d.filter(function (m) { return m.resposta; }).length / d.length) : null; } },
+    tempoResposta: { nome: 'Tempo mediano até a resposta', un: 'min', sentido: 'ruim', desc: 'Metade das perguntas foi respondida em até esse tempo (só as que têm resposta registrada).',
+      calc: function (l) {
+        var t = l.filter(function (m) { return ehDor(m) && m.resposta; }).map(function (m) { var r = respostaDe(m); return r ? (r.data - m.data) / 60000 : null; }).filter(function (x) { return x != null && x >= 0; }).sort(function (a, b) { return a - b; });
+        if (!t.length) return null;
+        var k = Math.floor(t.length / 2);
+        return Math.round(t.length % 2 ? t[k] : (t[k - 1] + t[k]) / 2);
+      } },
+    printsAguardando: { nome: 'Prints aguardando aprovação', un: 'prints', sentido: 'neutro', agora: true, desc: 'Prints prontos esperando você aprovar (situação de agora, não do período).',
+      calc: function () { return (conj().prints || []).filter(function (p) { return p.status === 'aguardando'; }).length; } }
+  };
+
+  function valorIndicador(id, lista) {
+    var ind = INDICADORES[id];
+    if (ind.calc) return ind.calc(lista);
+    return lista.filter(ind.conta).length;
+  }
+
+  function fmtIndicador(id, v) {
+    if (v == null) return '—';
+    var un = INDICADORES[id].un;
+    if (un === '%') return v + '%';
+    if (un === 'min') return v < 60 ? v + ' min' : (v / 60).toFixed(1).replace('.', ',') + ' h';
+    return U.fmtNum(v);
+  }
+
+  var SECOES_VISAO = [
+    { id: 'alertas', nome: 'Pede atenção agora', cheia: true },
+    { id: 'indicadores', nome: 'Indicadores', cheia: true },
+    { id: 'grafico', nome: 'Evolução no período', cheia: true },
+    { id: 'assuntos', nome: 'Assuntos recorrentes' },
+    { id: 'objecoes', nome: 'Objeções mais citadas' },
+    { id: 'ideias', nome: 'Ideias de conteúdo' },
+    { id: 'interacao', nome: 'O que mais gerou conversa no grupo' },
+    { id: 'alunas', nome: 'Alunas que pedem um olhar' },
+    { id: 'tipos', nome: 'Tipo de conteúdo', oculta: true }
+  ];
+
+  function prefsPadrao() {
+    return {
+      indicadores: ['msgs', 'dores', 'objecoes', 'semResposta', 'evolucao', 'depoimentos'],
+      secoes: SECOES_VISAO.map(function (s) { return { id: s.id, visivel: !s.oculta }; }),
+      periodo: '30',
+      metrica: 'msgs'
+    };
+  }
+
+  // Preferências ficam no navegador e não contêm dados das alunas: só ids de indicadores, seções e filtros.
+  var CHAVE_PREFS = 'painel-acompanhamento-visualizacoes-v1';
+  function lerVisualizacoes() {
+    try { var x = JSON.parse(localStorage.getItem(CHAVE_PREFS)); return x && x.lista ? x : { padrao: '', lista: {} }; } catch (e) { return { padrao: '', lista: {} }; }
+  }
+  function gravarVisualizacoes(v) {
+    try { localStorage.setItem(CHAVE_PREFS, JSON.stringify(v)); return true; } catch (e) { return false; }
+  }
+  function aplicarVisualizacao(v) {
+    var base = prefsPadrao();
+    S.prefs = {
+      indicadores: (v.prefs.indicadores || base.indicadores).filter(function (id) { return INDICADORES[id]; }),
+      secoes: SECOES_VISAO.map(function (s) { var x = (v.prefs.secoes || []).find(function (y) { return y.id === s.id; }); return { id: s.id, visivel: x ? !!x.visivel : !s.oculta, _ordem: x ? (v.prefs.secoes || []).indexOf(x) : 99 }; })
+        .sort(function (a, b) { return a._ordem - b._ordem; }).map(function (s) { return { id: s.id, visivel: s.visivel }; }),
+      periodo: v.prefs.periodo || base.periodo,
+      metrica: INDICADORES[v.prefs.metrica] ? v.prefs.metrica : base.metrica
+    };
+    var f = v.filtros || {};
+    S.filtros = { periodo: f.periodo || S.prefs.periodo, inicio: f.inicio || '', fim: f.fim || '', canal: f.canal || '', tema: S.temas.some(function (t) { return t.id === f.tema; }) ? f.tema : '', tipo: f.tipo || '', autorizacao: f.autorizacao || '' };
+  }
+
+  // Alertas por regra: só aparecem quando há dado que os sustente.
+  function calcularAlertas(atual, anterior, r) {
+    var out = [];
+    var dorA = U.contarPor(atual.filter(ehDor), 'tema'), dorB = U.contarPor(anterior.filter(ehDor), 'tema');
+    var subindo = Object.keys(dorA).filter(function (t) { var b = dorB[t] || 0; return dorA[t] >= 5 && b > 0 && (dorA[t] - b) / b >= 0.3; })
+      .sort(function (x, y) { return (dorA[y] - (dorB[y] || 0)) - (dorA[x] - (dorB[x] || 0)); });
+    if (subindo.length) {
+      var t0 = subindo[0], p0 = Math.round((dorA[t0] - dorB[t0]) / dorB[t0] * 100);
+      out.push({ nivel: 'atencao', texto: '<strong>' + esc(nomeTema(t0)) + '</strong> está crescendo: ' + dorA[t0] + ' dúvidas e dificuldades (+' + p0 + '% vs. período anterior).', rotulo: 'Ver dores', destino: 'dores' });
+    }
+    var objSub = r.objecoes.filter(function (o) { return o.n >= 5 && o.antes > 0 && (o.n - o.antes) / o.antes >= 0.3; });
+    if (objSub.length) out.push({ nivel: 'atencao', texto: 'A objeção <strong>"' + esc(objSub[0].obj.nome) + '"</strong> subiu: ' + objSub[0].n + ' menções (antes: ' + objSub[0].antes + ').', rotulo: 'Ver objeções', destino: 'dores' });
+    var semResp = atual.filter(function (m) { return ehDor(m) && !m.resposta; }).length;
+    if (semResp) out.push({ nivel: 'atencao', texto: '<strong>' + semResp + '</strong> pergunta(s) do período sem resposta registrada nos arquivos.', rotulo: 'Ver conversas', destino: 'dia-sem-resposta' });
+    var sinais = A.sinaisAlunas(msgsAlunas(), S.temas, refFim()).filter(function (s) { return s.tipo === 'dificuldade'; }).length;
+    if (sinais) out.push({ nivel: 'atencao', texto: '<strong>' + sinais + '</strong> aluna(s) com dificuldade repetida na última semana.', rotulo: 'Ver quem', destino: 'ajuda' });
+    var ag = (conj().prints || []).filter(function (p) { return p.status === 'aguardando'; }).length;
+    if (ag) out.push({ nivel: 'info', texto: '<strong>' + ag + '</strong> print(s) aguardando a sua aprovação.', rotulo: 'Aprovar', destino: 'prints' });
+    var nr = atual.filter(function (m) { return !m.revisado; }).length;
+    if (nr) out.push({ nivel: 'info', texto: '<strong>' + nr + '</strong> classificação(ões) automática(s) sem revisão no período.', rotulo: 'Revisar', destino: 'revisao' });
+    return out;
+  }
+
+  // Minigráfico de tendência (contagem por dia, ou por semana em períodos longos).
+  function sparkline(id, lista, iv) {
+    var ind = INDICADORES[id];
+    if (!ind.conta && id !== 'alunas') return '';
+    var dias = Math.round((iv[1] - iv[0]) / U.DIA);
+    var semanal = dias > 62;
+    var passo = semanal ? U.inicioSemana : U.inicioDia;
+    var chaves = [], idx = {};
+    for (var t = passo(iv[0]); t <= iv[1]; t = U.somarDias(t, semanal ? 7 : 1)) { idx[U.chaveDia(t)] = chaves.length; chaves.push(0); }
+    if (chaves.length < 2) return '';
+    var vistos = {};
+    lista.forEach(function (m) {
+      var i = idx[U.chaveDia(passo(m.data))];
+      if (i == null) return;
+      if (id === 'alunas') { var k = i + ':' + m.alunaId; if (!m.alunaId || vistos[k]) return; vistos[k] = 1; chaves[i]++; }
+      else if (ind.conta(m)) chaves[i]++;
+    });
+    var w = 120, h = 28, max = Math.max.apply(null, chaves) || 1;
+    var pts = chaves.map(function (v, i) { return (i * w / (chaves.length - 1)).toFixed(1) + ',' + (h - 3 - v / max * (h - 6)).toFixed(1); });
+    var ult = pts[pts.length - 1].split(',');
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true" preserveAspectRatio="none"><polyline points="' + pts.join(' ') + '" style="fill:none;stroke:var(--muted);stroke-width:1.5;vector-effect:non-scaling-stroke"></polyline>' +
+      '<circle cx="' + ult[0] + '" cy="' + ult[1] + '" r="2.5" style="fill:var(--accent)"></circle></svg>';
+  }
+
+  function textoPeriodo(iv) {
+    var dias = Math.round((iv[1] - iv[0]) / U.DIA);
+    return U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + ' · ' + dias + ' dia' + (dias > 1 ? 's' : '');
+  }
+
   /* ---------- pequenos componentes ---------- */
 
   function opcoes(mapa, atual, vazio) {
@@ -183,7 +330,7 @@
   function classeChip(m) {
     if (m.revisado) return '<span class="chip chip-ok" title="Classificação conferida por uma pessoa">Revisada</span>';
     var conf = m.auto ? (m.auto.confTipo === 'baixa' || m.auto.confTema === 'baixa' ? 'baixa' : m.auto.confTipo === 'alta' && m.auto.confTema === 'alta' ? 'alta' : 'média') : 'baixa';
-    return '<span class="chip chip-auto" title="Sugestão automática por palavras-chave. Precisa de revisão.">Sugestão automática · confiança ' + conf + '</span>';
+    return '<span class="chip chip-auto" title="Classificação automática por palavras-chave, confiança ' + conf + '. Confira e confirme em Mensagens e revisão.">Não revisada</span>';
   }
 
   function autChip(aut) {
@@ -224,47 +371,71 @@
     });
     document.getElementById('papel').value = S.papel;
 
+    var ultima = 0;
+    conj().mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
+    document.getElementById('status-dados').textContent = (S.modo === 'demo' ? 'Exemplo fictício' : 'Dados importados') +
+      (ultima ? ' · mensagens até ' + U.fmtDataHora(ultima) : ' · sem mensagens') + ' · análises às ' + U.fmtHora(S.calculadoEm);
+
     var faixa = document.getElementById('faixa');
     if (S.modo === 'demo') {
       faixa.className = 'faixa faixa-demo';
-      faixa.innerHTML = '<strong>Dados fictícios.</strong> Pessoas, mensagens e ilustrações desta tela são exemplos para demonstração. Nenhuma conversa real está conectada.';
+      faixa.innerHTML = '<strong>Dados fictícios.</strong> Pessoas, mensagens e imagens são exemplos. Login e permissões são simulados.';
     } else {
       faixa.className = 'faixa faixa-import';
-      faixa.innerHTML = '<strong>Dados importados manualmente.</strong> Ficam só nesta aba do navegador e somem ao recarregar. Nenhuma integração automática está ativa.';
+      faixa.innerHTML = '<strong>Dados importados.</strong> Ficam só nesta aba e somem ao recarregar. Login e permissões são simulados.';
     }
-    faixa.innerHTML += ' <span class="faixa-sim">Login e permissões são simulados neste protótipo.</span>';
 
     var aguardando = (conj().prints || []).filter(function (x) { return x.status === 'aguardando'; }).length;
-    document.getElementById('nav').innerHTML = ABAS.map(function (a) {
-      var extra = a.id === 'prints' && aguardando ? '<span class="nav-cont" aria-label="' + aguardando + ' aguardando aprovação">' + aguardando + '</span>' : '';
-      return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + extra + '</button>';
+    var grupos = [];
+    ABAS.forEach(function (a) { var g = grupos.find(function (x) { return x.nome === a.grupo; }); if (!g) grupos.push(g = { nome: a.grupo, abas: [] }); g.abas.push(a); });
+    var nav = document.getElementById('nav');
+    nav.innerHTML = grupos.map(function (g) {
+      return '<div class="nav-grupo">' + (g.nome ? '<span class="nav-titulo">' + esc(g.nome) + '</span>' : '') + g.abas.map(function (a) {
+        var extra = a.id === 'prints' && aguardando ? '<span class="nav-cont" aria-label="' + aguardando + ' aguardando aprovação">' + aguardando + '</span>' : '';
+        return '<button type="button" class="nav-item" data-acao="aba" data-v="' + a.id + '"' + (a.id === S.aba ? ' aria-current="page"' : '') + '>' + esc(a.nome) + extra + '</button>';
+      }).join('') + '</div>';
     }).join('');
+    nav.classList.toggle('aberto', !!S.menuAberto);
+    var bm = document.getElementById('menu-btn');
+    bm.setAttribute('aria-expanded', String(!!S.menuAberto));
+    var atual = ABAS.find(function (a) { return a.id === S.aba; });
+    bm.querySelector('.menu-atual').textContent = atual ? atual.nome : 'Menu';
   }
 
-  function filtrosVisiveis() { return ['visao', 'dores', 'resultados', 'ideias', 'ajuda', 'mensagens', 'relatorios'].indexOf(S.aba) !== -1; }
+  function filtrosVisiveis() { return ['visao', 'dia', 'dores', 'resultados', 'ideias', 'ajuda', 'mensagens', 'relatorios'].indexOf(S.aba) !== -1; }
+
+  var PERIODOS = [['7', '7 dias'], ['14', '14 dias'], ['30', '30 dias'], ['60', '60 dias'], ['tudo', 'Tudo'], ['custom', 'Escolher datas']];
 
   function renderFiltros() {
     var el = document.getElementById('filtros');
     if (!filtrosVisiveis() || !conj().mensagens.length) { el.innerHTML = ''; return; }
     var f = S.filtros;
-    var ativos = ['canal', 'tema', 'tipo', 'autorizacao'].filter(function (k) { return f[k]; }).length;
-    var iv = intervalo();
-    var aberto = el.querySelector('details') ? el.querySelector('details').open : window.innerWidth >= 900;
-    el.innerHTML =
-      '<details class="filtros"' + (aberto ? ' open' : '') + '>' +
-      '<summary><span>Filtros</span><span class="filtros-resumo">' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + (ativos ? ' · ' + ativos + ' filtro' + (ativos > 1 ? 's' : '') + ' ativo' + (ativos > 1 ? 's' : '') : '') + '</span></summary>' +
-      '<div class="filtros-grade">' +
-      campoSelect('f-periodo', 'Período', 'periodo', { '7': 'Últimos 7 dias', '14': 'Últimos 14 dias', '30': 'Últimos 30 dias', '60': 'Últimos 60 dias', 'tudo': 'Tudo', 'custom': 'Escolher datas' }, f.periodo) +
-      (f.periodo === 'custom'
-        ? '<label class="campo"><span>De</span><input type="date" id="f-inicio" data-mudar="filtro" data-k="inicio" value="' + esc(f.inicio) + '"></label>' +
-          '<label class="campo"><span>Até</span><input type="date" id="f-fim" data-mudar="filtro" data-k="fim" value="' + esc(f.fim) + '"></label>'
-        : '') +
+    var nomesF = { canal: 'Canal', tema: 'Assunto', tipo: 'Tipo', autorizacao: 'Autorização' };
+    var valores = { canal: CANAIS, tema: mapaTemas(), tipo: mapaTipos(), autorizacao: AUT };
+    var ativos = Object.keys(nomesF).filter(function (k) { return f[k]; });
+    var noDia = S.aba === 'dia';
+    var h = '<div class="barra-filtros" role="region" aria-label="Período e filtros">';
+    if (noDia) h += '<span class="periodo-txt">Período: o dia escolhido abaixo</span>';
+    else {
+      h += '<div class="periodos" role="group" aria-label="Período">' + PERIODOS.map(function (p) {
+        return '<button type="button" class="chip-periodo" data-acao="periodo" data-v="' + p[0] + '" aria-pressed="' + (f.periodo === p[0]) + '">' + p[1] + '</button>';
+      }).join('') + '</div>';
+      if (f.periodo === 'custom') h += '<div class="datas"><label class="campo campo-peq"><span>De</span><input type="date" id="f-inicio" data-mudar="filtro" data-k="inicio" value="' + esc(f.inicio) + '"></label>' +
+        '<label class="campo campo-peq"><span>Até</span><input type="date" id="f-fim" data-mudar="filtro" data-k="fim" value="' + esc(f.fim) + '"></label></div>';
+      h += '<span class="periodo-txt">' + textoPeriodo(intervalo()) + '</span>';
+    }
+    h += '<button type="button" class="btn btn-sec btn-peq" data-acao="toggle-filtros" aria-expanded="' + !!S.filtrosAbertos + '" aria-controls="filtros-mais">Filtros' + (ativos.length ? ' (' + ativos.length + ')' : '') + '</button>';
+    if (ativos.length) {
+      h += '<div class="filtros-ativos" aria-label="Filtros ativos">' + ativos.map(function (k) {
+        return '<button type="button" class="chip-filtro" data-acao="remover-filtro" data-k="' + k + '" aria-label="Remover filtro ' + nomesF[k] + ': ' + esc(valores[k][f[k]] || f[k]) + '">' + nomesF[k] + ': ' + esc(valores[k][f[k]] || f[k]) + ' <span aria-hidden="true">×</span></button>';
+      }).join('') + '<button type="button" class="link" data-acao="limpar-filtros">Limpar filtros</button></div>';
+    }
+    h += '<div class="filtros-mais" id="filtros-mais"' + (S.filtrosAbertos ? '' : ' hidden') + '>' +
       campoSelect('f-canal', 'Canal', 'canal', CANAIS, f.canal, 'Todos') +
       campoSelect('f-tema', 'Assunto', 'tema', mapaTemas(), f.tema, 'Todos') +
-      campoSelect('f-tipo', 'Tipo de conteúdo', 'tipo', mapaTipos(), f.tipo, 'Todos') +
-      campoSelect('f-aut', 'Autorização', 'autorizacao', AUT, f.autorizacao, 'Qualquer') +
-      '<div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="limpar-filtros">Limpar filtros</button></div>' +
-      '</div></details>';
+      campoSelect('f-tipo', 'Tipo de mensagem', 'tipo', mapaTipos(), f.tipo, 'Todos') +
+      campoSelect('f-aut', 'Autorização', 'autorizacao', AUT, f.autorizacao, 'Qualquer') + '</div>';
+    el.innerHTML = h + '</div>';
   }
 
   function campoSelect(id, rotulo, k, mapa, atual, vazioTxt) {
@@ -294,76 +465,110 @@
     var iv = intervalo(), ant = intervaloAnterior(iv);
     var atual = filtrar(msgsAlunas(), iv), anterior = filtrar(msgsAlunas(), ant);
     var r = analisar(atual, anterior, iv);
-    var porTipoA = U.contarPor(atual, 'tipo'), porTipoB = U.contarPor(anterior, 'tipo');
-    var comObj = function (l) { return l.filter(function (m) { return !ehProva(m) && A.detectar(m.texto, S.objecoes).length; }).length; };
-    var naoRev = atual.filter(function (m) { return !m.revisado; }).length;
+    var periodo = textoPeriodo(iv);
+    var vis = lerVisualizacoes();
+    var nomes = Object.keys(vis.lista);
 
-    function kpi(rot, a, b) {
-      var v = U.variacao(a, b);
-      return '<div class="kpi"><span class="kpi-rot">' + rot + '</span><span class="kpi-num">' + U.fmtNum(a) + '</span>' +
-        '<span class="kpi-var var-' + v.dir + '">' + (v.dir === 'sobe' ? '▲ ' : v.dir === 'desce' ? '▼ ' : '') + v.txt + ' <span class="kpi-ref">vs. período anterior</span></span></div>';
-    }
+    var h = '<div class="cabeca-aba cabeca-linha"><div><h1>Visão geral</h1><p class="sub">O que as alunas trouxeram de ' + periodo + '. Mensagens da equipe não entram nas contagens.</p></div>' +
+      '<div class="ferramentas" role="group" aria-label="Personalização">' +
+      (nomes.length ? '<label class="campo campo-peq"><span>Visualização</span><select id="vis-atual" data-mudar="vis-aplicar">' + opcoes(nomes.reduce(function (o, n) { o[n] = n + (vis.padrao === n ? ' (abre sempre)' : ''); return o; }, {}), S.visAtual || '', 'Atual (não salva)') + '</select></label>' : '') +
+      '<button type="button" class="btn btn-sec btn-peq" data-acao="personalizar" title="Escolha e ordene indicadores e seções">Personalizar painel</button>' +
+      '<button type="button" class="btn btn-sec btn-peq" data-acao="salvar-vis" title="Guarda indicadores, seções, período e filtros neste navegador">Salvar visualização</button>' +
+      '</div></div>';
 
-    var h = '<div class="cabeca-aba"><h1>Visão geral</h1><p class="sub">O que as alunas trouxeram no período. Mensagens da equipe não entram nas contagens.</p></div>';
-    if (naoRev) {
-      h += '<p class="nota nota-revisao"><strong>' + naoRev + ' de ' + atual.length + '</strong> mensagens do período ainda têm só a classificação automática. ' +
-        '<button type="button" class="link" data-acao="ir-revisao">Revisar agora</button></p>';
-    }
-    h += '<section class="kpis" aria-label="Números do período">' +
-      kpi('Mensagens das alunas', atual.length, anterior.length) +
-      kpi('Dúvidas', porTipoA.duvida || 0, porTipoB.duvida || 0) +
-      kpi('Queixas e dificuldades', (porTipoA.queixa || 0) + (porTipoA.dificuldade || 0), (porTipoB.queixa || 0) + (porTipoB.dificuldade || 0)) +
-      kpi('Mensagens com objeção', comObj(atual), comObj(anterior)) +
-      kpi('Depoimentos positivos', porTipoA.depoimento || 0, porTipoB.depoimento || 0) +
-      kpi('Relatos de evolução', porTipoA.evolucao || 0, porTipoB.evolucao || 0) +
-      '</section>';
+    var blocos = {
+      alertas: function () {
+        var al = calcularAlertas(atual, anterior, r);
+        if (!al.length) return '<p class="sub">Nada fora do normal no período.</p>';
+        return '<ul class="alertas">' + al.map(function (x) {
+          return '<li class="alerta alerta-' + x.nivel + '"><span class="alerta-icone" aria-hidden="true">' + (x.nivel === 'atencao' ? '!' : 'i') + '</span>' +
+            '<span class="sr">' + (x.nivel === 'atencao' ? 'Atenção: ' : 'Informação: ') + '</span><span class="alerta-texto">' + x.texto + '</span>' +
+            '<button type="button" class="link" data-acao="ir-alerta" data-v="' + x.destino + '">' + esc(x.rotulo) + '</button></li>';
+        }).join('') + '</ul><p class="nota-peq">Alertas gerados por regras a partir dos dados do período.</p>';
+      },
+      indicadores: function () {
+        return '<div class="kpis">' + S.prefs.indicadores.map(function (id) {
+          var ind = INDICADORES[id];
+          var a = valorIndicador(id, atual);
+          var linha;
+          if (ind.agora) linha = '<span class="kpi-var">situação de agora</span>';
+          else {
+            var b = valorIndicador(id, anterior);
+            if (a == null || b == null) linha = '<span class="kpi-var">sem base de comparação</span>';
+            else {
+              var v = U.variacao(a, b);
+              var juizo = v.dir === 'igual' ? '' : ind.sentido === 'neutro' ? '' : ((v.dir === 'sobe') === (ind.sentido === 'bom') ? 'melhorou' : 'piorou');
+              var dif = ind.un === '%' ? (a - b > 0 ? '+' : '') + (a - b) + ' p.p.' : v.txt;
+              linha = '<span class="kpi-var' + (juizo ? ' var-' + (juizo === 'melhorou' ? 'bom' : 'ruim') : '') + '">' + (v.dir === 'sobe' ? '▲ ' : v.dir === 'desce' ? '▼ ' : '') + esc(dif) + (juizo ? ' · ' + juizo : '') + '<span class="kpi-ref"> vs. período anterior</span></span>';
+            }
+          }
+          return '<div class="kpi" title="' + esc(ind.desc) + '"><span class="kpi-rot">' + esc(ind.nome) + '</span>' +
+            '<span class="kpi-linha"><span class="kpi-num">' + fmtIndicador(id, a) + '</span>' + (ind.un === 'mensagens' || ind.un === 'alunas' || ind.un === 'prints' ? '<span class="kpi-un">' + ind.un + '</span>' : '') + '</span>' +
+            linha + (ind.agora ? '' : sparkline(id, atual, iv)) + '</div>';
+        }).join('') +
+          '</div><div class="kpi-rodape"><button type="button" class="link" data-acao="personalizar" data-foco="adicionar">+ Adicionar indicador</button><span class="sub">Passe o mouse sobre um indicador para ver como ele é calculado.</span></div>';
+      },
+      grafico: function () {
+        var ind = INDICADORES[S.prefs.metrica];
+        var metricas = {};
+        Object.keys(INDICADORES).forEach(function (k) { if (INDICADORES[k].conta) metricas[k] = INDICADORES[k].nome; });
+        return '<div class="grafico-ctrl"><label class="campo campo-peq"><span>Mostrar</span><select id="g-metrica" data-mudar="metrica">' + opcoes(metricas, S.prefs.metrica) + '</select></label>' +
+          '<div class="seg seg-peq" role="group" aria-label="Agrupar por">' +
+          '<button type="button" data-acao="gran" data-v="dia" aria-pressed="' + (S.gran === 'dia') + '">Por dia</button>' +
+          '<button type="button" data-acao="gran" data-v="semana" aria-pressed="' + (S.gran === 'semana') + '">Por semana</button></div></div>' +
+          '<p class="sub">' + esc(ind.nome) + ' por ' + (S.gran === 'dia' ? 'dia' : 'semana') + ', separado por canal. Passe o dedo ou o mouse para ver cada valor.</p>' +
+          '<div id="grafico" class="grafico" role="img" aria-label="' + esc(ind.nome) + ' por ' + S.gran + ' e por canal, de ' + periodo + '"></div>';
+      },
+      assuntos: function () {
+        var temasA = U.contarPor(atual, 'tema'), temasB = U.contarPor(anterior, 'tema');
+        var semAssunto = temasA.outros || 0;
+        var ordem = Object.keys(temasA).filter(function (t) { return t !== 'outros'; }).sort(function (a, b) { return temasA[b] - temasA[a]; });
+        if (!ordem.length) return '<p class="sub">Sem mensagens com assunto definido no período.</p>';
+        var maxT = temasA[ordem[0]];
+        var mostrar = S.verTodosAssuntos ? ordem : ordem.slice(0, 6);
+        return '<p class="sub">Mensagens por assunto. Toque para filtrar o painel.</p><ul class="barras">' + mostrar.map(function (t) {
+          var v = U.variacao(temasA[t], temasB[t] || 0);
+          return '<li><button type="button" class="barra-linha" data-acao="filtrar-tema" data-v="' + esc(t) + '">' +
+            '<span class="barra-rot">' + esc(nomeTema(t)) + '</span>' +
+            '<span class="barra-trilho"><span class="barra" style="width:' + Math.max(2, temasA[t] / maxT * 100) + '%"></span></span>' +
+            '<span class="barra-num">' + temasA[t] + '</span><span class="barra-det">' + v.txt + ' vs. período anterior</span></button></li>';
+        }).join('') + '</ul>' + (ordem.length > 6 ? '<button type="button" class="link" data-acao="ver-todos-assuntos">' + (S.verTodosAssuntos ? 'Mostrar só os 6 principais' : 'Ver todos (' + ordem.length + ')') + '</button>' : '') +
+          (semAssunto ? '<p class="nota-peq">' + semAssunto + ' mensagem(ns) sem assunto definido (respostas curtas como "Eu topo!" ou textos que não batem com nenhuma palavra-chave). <button type="button" class="link" data-acao="filtrar-tema" data-v="outros">Ver quais são</button></p>' : '');
+      },
+      objecoes: function () {
+        if (!r.objecoes.length) return '<p class="sub">Nenhuma objeção encontrada no período.</p>';
+        var maxO = r.objecoes[0].n;
+        return '<p class="sub">Mensagens que citam cada objeção.</p><ul class="barras barras-simples">' + r.objecoes.slice(0, 5).map(function (o) {
+          return '<li><div class="barra-linha estatica"><span class="barra-rot">"' + esc(o.obj.nome) + '"</span>' +
+            '<span class="barra-trilho"><span class="barra barra-tipo" style="width:' + Math.max(2, o.n / maxO * 100) + '%"></span></span>' +
+            '<span class="barra-num">' + o.n + '</span></div></li>';
+        }).join('') + '</ul><button type="button" class="link" data-acao="aba" data-v="dores">Ver objeções e como quebrar</button>';
+      },
+      ideias: function () { return blocoIdeias(atual, 3) + '<button type="button" class="link" data-acao="aba" data-v="ideias">Ver pauta completa</button>'; },
+      interacao: function () { return blocoInteracao(r.interacao, 3); },
+      alunas: function () {
+        var s = A.sinaisAlunas(msgsAlunas(), S.temas, iv[1]);
+        var dif = s.filter(function (x) { return x.tipo === 'dificuldade'; }).length, sum = s.length - dif;
+        return s.length ? '<p><strong>' + dif + '</strong> com dificuldade repetida na última semana e <strong>' + sum + '</strong> que pararam de escrever há 10 dias ou mais.</p><button type="button" class="link" data-acao="aba" data-v="ajuda">Ver quem são</button>' : '<p class="sub">Nenhum sinal no momento.</p>';
+      },
+      tipos: function () {
+        var porTipo = U.contarPor(atual, 'tipo'), mx = 1;
+        C.TIPOS.forEach(function (t) { mx = Math.max(mx, porTipo[t.id] || 0); });
+        return '<ul class="barras barras-simples">' + C.TIPOS.map(function (t) {
+          var n = porTipo[t.id] || 0;
+          return '<li><div class="barra-linha estatica"><span class="barra-rot">' + esc(t.nome) + '</span><span class="barra-trilho"><span class="barra barra-tipo" style="width:' + (n ? Math.max(2, n / mx * 100) : 0) + '%"></span></span><span class="barra-num">' + n + '</span></div></li>';
+        }).join('') + '</ul>';
+      }
+    };
 
-    h += '<section class="painel-card"><div class="card-topo"><h2>Mensagens ao longo do tempo</h2>' +
-      '<div class="seg seg-peq" role="group" aria-label="Agrupar por">' +
-      '<button type="button" data-acao="gran" data-v="dia" aria-pressed="' + (S.gran === 'dia') + '">Por dia</button>' +
-      '<button type="button" data-acao="gran" data-v="semana" aria-pressed="' + (S.gran === 'semana') + '">Por semana</button></div></div>' +
-      '<div id="grafico" class="grafico" role="img" aria-label="Gráfico de linhas com mensagens por canal ao longo do período"></div></section>';
-
-    // Assuntos
-    var temasA = U.contarPor(atual, 'tema'), temasB = U.contarPor(anterior, 'tema');
-    var duvPorTema = U.contarPor(atual.filter(function (m) { return m.tipo === 'duvida'; }), 'tema');
-    var ordem = Object.keys(temasA).sort(function (a, b) { return temasA[b] - temasA[a]; });
-    var maxT = ordem.length ? temasA[ordem[0]] : 1;
-    h += '<div class="duas">';
-    h += '<section class="painel-card"><h2>Assuntos recorrentes</h2><p class="sub">Toque em um assunto para filtrar o painel.</p><ul class="barras">' +
-      ordem.map(function (t) {
-        var v = U.variacao(temasA[t], temasB[t] || 0);
-        return '<li><button type="button" class="barra-linha" data-acao="filtrar-tema" data-v="' + esc(t) + '">' +
-          '<span class="barra-rot">' + esc(nomeTema(t)) + '</span>' +
-          '<span class="barra-trilho"><span class="barra" style="width:' + Math.max(2, temasA[t] / maxT * 100) + '%"></span></span>' +
-          '<span class="barra-num">' + temasA[t] + '</span>' +
-          '<span class="barra-det">' + (duvPorTema[t] || 0) + ' dúvidas · <span class="var-' + v.dir + '">' + v.txt + '</span></span>' +
-          '</button></li>';
-      }).join('') + '</ul></section>';
-
-    // Objeções + canal
-    var porCanal = U.contarPor(atual, 'canal');
-    var tot = atual.length || 1;
-    var wa = porCanal.whatsapp || 0, tg = porCanal.telegram || 0;
-    var maxO = r.objecoes.length ? r.objecoes[0].n : 1;
-    h += '<div class="pilha"><section class="painel-card"><div class="card-topo"><h2>Objeções mais citadas</h2><button type="button" class="link" data-acao="aba" data-v="dores">Ver todas</button></div>' +
-      (r.objecoes.length ? '<ul class="barras barras-simples">' + r.objecoes.slice(0, 6).map(function (o) {
-        return '<li><div class="barra-linha estatica"><span class="barra-rot">"' + esc(o.obj.nome) + '"</span>' +
-          '<span class="barra-trilho"><span class="barra barra-tipo" style="width:' + Math.max(2, o.n / maxO * 100) + '%"></span></span>' +
-          '<span class="barra-num">' + o.n + '</span></div></li>';
-      }).join('') + '</ul>' : '<p class="sub">Nenhuma objeção encontrada no período.</p>') + '</section>' +
-      '<section class="painel-card"><h2>Por canal</h2>' +
-      '<div class="divisao" aria-hidden="true"><span class="div-wa" style="width:' + (wa / tot * 100) + '%"></span><span class="div-tg" style="width:' + (tg / tot * 100) + '%"></span></div>' +
-      '<dl class="legenda-canais"><div><dt>' + canalTag('whatsapp') + '</dt><dd>' + wa + ' <span class="sub">(' + Math.round(wa / tot * 100) + '%)</span></dd></div>' +
-      '<div><dt>' + canalTag('telegram') + '</dt><dd>' + tg + ' <span class="sub">(' + Math.round(tg / tot * 100) + '%)</span></dd></div></dl></section></div>';
-    h += '</div>';
-
-    // Ideias + interação + cuidado
-    h += '<div class="duas"><section class="painel-card"><div class="card-topo"><h2>Ideias de conteúdo a partir das dúvidas</h2><button type="button" class="link" data-acao="aba" data-v="ideias">Ver pauta completa</button></div>' + blocoIdeias(atual, 3) + '</section>';
-    h += '<section class="painel-card"><div class="card-topo"><h2>O que mais gerou conversa no grupo</h2></div>' + blocoInteracao(r.interacao, 3) + '</section></div>';
-    var sinais = A.sinaisAlunas(msgsAlunas(), S.temas, iv[1]);
-    h += '<section class="painel-card"><div class="card-topo"><h2>Alunas que pedem um olhar mais próximo</h2><button type="button" class="link" data-acao="aba" data-v="ajuda">Como ajudar mais</button></div>' +
-      (sinais.length ? '<p>' + sinais.filter(function (s) { return s.tipo === 'dificuldade'; }).length + ' com dificuldade repetida na última semana e ' + sinais.filter(function (s) { return s.tipo === 'sumiu'; }).length + ' que pararam de escrever.</p>' : '<p class="sub">Nenhum sinal no momento.</p>') + '</section>';
+    var visiveis = S.prefs.secoes.filter(function (s) { return s.visivel; });
+    if (!visiveis.length) return h + vazio('Todas as seções estão ocultas', 'Use "Personalizar painel" para mostrar as seções que quiser.', '<button type="button" class="btn" data-acao="personalizar">Personalizar painel</button>');
+    h += '<div class="secoes-visao">' + visiveis.map(function (s) {
+      var def = SECOES_VISAO.find(function (x) { return x.id === s.id; });
+      var titulo = s.id === 'grafico' ? 'Evolução no período' : def.nome;
+      if (s.id === 'indicadores') return '<section class="secao-cheia" aria-label="Indicadores">' + blocos.indicadores() + '</section>';
+      return '<section class="painel-card' + (def.cheia ? ' secao-cheia' : '') + (s.id === 'alertas' ? ' card-alertas' : '') + '" aria-labelledby="sec-' + s.id + '"><div class="card-topo"><h2 id="sec-' + s.id + '">' + esc(titulo) + '</h2></div>' + blocos[s.id]() + '</section>';
+    }).join('') + '</div>';
     return h;
   }
 
@@ -375,12 +580,12 @@
     return '<ol class="ideias">' + top.map(function (t) {
       var tm = S.temas.find(function (x) { return x.id === t; });
       return '<li><span class="ideia-tema">' + esc(tm.nome) + ' <span class="sub">· ' + duv[t] + ' dúvidas e dificuldades</span></span><span>' + esc(tm.ideia) + '</span></li>';
-    }).join('') + '</ol><p class="nota-peq">Sugestões geradas por regras a partir dos assuntos mais frequentes. Revise antes de virar post.</p>';
+    }).join('') + '</ol>';
   }
 
   function blocoInteracao(inter, n) {
-    if (!inter.posts.length) return '<p class="sub">Sem mensagens da equipe no Telegram neste período. Ao importar o grupo, marque quem é da equipe para ver o que gera mais resposta.</p>';
-    return '<p class="sub">Média: ' + inter.media.toFixed(1).replace('.', ',') + ' respostas das alunas por mensagem sua (até 3 h depois).</p><ol class="ideias">' + inter.posts.slice(0, n).map(function (x) {
+    if (!inter.posts.length) return '<p class="sub">Sem mensagens da equipe no Telegram neste período. Ao importar o grupo, marque quem é da equipe.</p>';
+    return '<p class="sub">Respostas das alunas até 3 h depois de cada mensagem sua. Média: ' + inter.media.toFixed(1).replace('.', ',') + '.</p><ol class="ideias">' + inter.posts.slice(0, n).map(function (x) {
       return '<li><span>' + citar(x.texto) + '</span><span class="sub">' + x.media.toFixed(1).replace('.', ',') + ' respostas em média' + (x.vezes > 1 ? ' · enviada ' + x.vezes + 'x' : '') + '</span></li>';
     }).join('') + '</ol>';
   }
@@ -389,7 +594,8 @@
     var el = document.getElementById('grafico');
     if (!el) return;
     var iv = intervalo();
-    var lista = filtrar(msgsAlunas(), iv);
+    var ind = INDICADORES[S.prefs.metrica];
+    var lista = filtrar(msgsAlunas(), iv).filter(ind.conta);
     var chaves = [], idx = {};
     var passoFn = S.gran === 'semana' ? U.inicioSemana : U.inicioDia;
     for (var t = passoFn(iv[0]); t <= iv[1]; t = U.somarDias(t, S.gran === 'semana' ? 7 : 1)) {
@@ -423,7 +629,6 @@
 
     var h = '<div class="cabeca-aba"><h1>Conversas do dia</h1><p class="sub">O que aconteceu nas conversas que você já tem no WhatsApp e no grupo: o assunto do dia, quem perguntou o quê e o que a equipe respondeu. Aqui é só para ver e organizar. Ninguém é respondido pelo painel.</p></div>';
     h += '<div class="linha-controles"><label class="campo"><span>Dia</span><input type="date" id="dia-resumo" data-mudar="dia-resumo" value="' + U.chaveDia(dia) + '" min="' + U.chaveDia(refInicio()) + '" max="' + U.chaveDia(fimRef) + '"></label>' +
-      '<label class="campo"><span>Canal</span><select id="dia-canal" data-mudar="filtro" data-k="canal">' + opcoes(CANAIS, S.filtros.canal, 'Todos') + '</select></label>' +
       '<button type="button" class="btn btn-sec" data-acao="resumo-copiar">Copiar resumo (sem dados pessoais)</button></div>';
 
     h += '<section class="assunto-dia"><span class="kpi-rot">Assunto do dia</span>' +
@@ -649,7 +854,8 @@
   function abaMensagens() {
     var h = '<div class="cabeca-aba"><h1>Mensagens e revisão</h1><p class="sub">Busque por palavra ou assunto e corrija a classificação automática. Só depois de revisadas as mensagens entram nos relatórios (essa opção pode ser desligada em Relatórios). Os textos aparecem sem telefone, e-mail ou sobrenome.</p></div>';
     h += '<div class="linha-controles"><label class="campo campo-largo"><span>Buscar</span><input type="search" id="busca" placeholder="Ex.: televisão, marmita, glúteo, A-012" value="' + esc(S.busca) + '" autocomplete="off"></label>' +
-      '<label class="check"><input type="checkbox" id="so-nao-rev" data-mudar="so-nao-rev"' + (S.soNaoRevisadas ? ' checked' : '') + '> Só não revisadas</label></div>';
+      '<label class="check"><input type="checkbox" id="so-nao-rev" data-mudar="so-nao-rev"' + (S.soNaoRevisadas ? ' checked' : '') + '> Só não revisadas</label>' +
+      '<label class="check"><input type="checkbox" id="so-sem-resp" data-mudar="so-sem-resp"' + (S.soSemResposta ? ' checked' : '') + '> Só perguntas sem resposta registrada</label></div>';
     if (!pode('editar')) h += semPermissao('corrigir classificações');
     h += '<div id="lista-mensagens"></div>';
     return h;
@@ -661,6 +867,7 @@
     var q = U.norm(S.busca.trim());
     var lista = filtrar(msgsAlunas(), intervalo()).filter(function (m) {
       if (S.soNaoRevisadas && m.revisado) return false;
+      if (S.soSemResposta && !(ehDor(m) && !m.resposta)) return false;
       if (!q) return true;
       return U.norm(textoSeguro(m)).indexOf(q) !== -1 || U.norm(nomeTema(m.tema)).indexOf(q) !== -1 || U.norm(m.alunaId).indexOf(q) !== -1;
     }).sort(function (a, b) { return b.data - a.data; });
@@ -763,16 +970,27 @@
     ligarCanvas();
   }
 
+  // Janela sobreposta: leva o foco para dentro, prende o Tab e devolve o foco ao fechar.
   function abrirModal(html) {
     var el = document.getElementById('modal');
+    var jaAberto = !el.hidden;
+    var focoId = jaAberto && document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : '';
+    var focoAcao = jaAberto && document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.acao : '';
+    if (!jaAberto) S.focoAntes = document.activeElement;
     document.body.classList.add('com-modal');
     el.hidden = false;
     el.innerHTML = html;
+    var alvo = (focoId && document.getElementById(focoId)) || (focoAcao && el.querySelector('[data-acao="' + focoAcao + '"]:not([disabled])'));
+    if (!alvo) { var cx = el.querySelector('[role="dialog"]'); cx.setAttribute('tabindex', '-1'); alvo = cx; }
+    alvo.focus({ preventScroll: true });
   }
   function fecharModal() {
     var el = document.getElementById('modal');
     el.hidden = true; el.innerHTML = '';
     document.body.classList.remove('com-modal');
+    S.modalAtivo = ''; S.confirmarRedefinir = false;
+    if (S.focoAntes && document.body.contains(S.focoAntes)) S.focoAntes.focus({ preventScroll: true });
+    S.focoAntes = null;
   }
 
   function desenharEditor() {
@@ -985,6 +1203,106 @@
     render();
   }
 
+  /* ---------- Personalizar, salvar visualização e atualizar dados ---------- */
+
+  function renderPersonalizar() {
+    var pf = S.prefs;
+    var restantes = {};
+    Object.keys(INDICADORES).forEach(function (k) { if (pf.indicadores.indexOf(k) === -1) restantes[k] = INDICADORES[k].nome; });
+    var periodos = { '7': 'Últimos 7 dias', '14': 'Últimos 14 dias', '30': 'Últimos 30 dias', '60': 'Últimos 60 dias', 'tudo': 'Tudo' };
+    var metricas = {};
+    Object.keys(INDICADORES).forEach(function (k) { if (INDICADORES[k].conta) metricas[k] = INDICADORES[k].nome; });
+    function setas(lista, i, tipo) {
+      return '<span class="ordem"><button type="button" class="btn btn-sec btn-icone" data-acao="mover" data-tipo="' + tipo + '" data-i="' + i + '" data-d="-1"' + (i === 0 ? ' disabled' : '') + ' aria-label="Subir">↑</button>' +
+        '<button type="button" class="btn btn-sec btn-icone" data-acao="mover" data-tipo="' + tipo + '" data-i="' + i + '" data-d="1"' + (i === lista.length - 1 ? ' disabled' : '') + ' aria-label="Descer">↓</button></span>';
+    }
+    abrirModal('<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="pz-tit">' +
+      '<div class="card-topo"><h2 id="pz-tit">Personalizar painel</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
+      '<p class="sub">As mudanças aparecem na hora na Visão geral. Para guardar e usar de novo depois, clique em "Salvar visualização".</p>' +
+      '<h3>Indicadores</h3><ol class="lista-ordem">' + pf.indicadores.map(function (id, i) {
+        return '<li><span><strong>' + esc(INDICADORES[id].nome) + '</strong><span class="sub"> · ' + esc(INDICADORES[id].desc) + '</span></span>' + setas(pf.indicadores, i, 'ind') +
+          '<button type="button" class="btn btn-sec btn-peq" data-acao="remover-ind" data-v="' + id + '" aria-label="Remover ' + esc(INDICADORES[id].nome) + '">Remover</button></li>';
+      }).join('') + '</ol>' +
+      (Object.keys(restantes).length ? '<div class="linha-controles"><label class="campo campo-largo"><span>Indicador para adicionar</span><select id="pz-novo">' + opcoes(restantes, '') + '</select></label>' +
+        '<div class="campo campo-botao"><button type="button" class="btn btn-peq" data-acao="adicionar-ind">Adicionar indicador</button></div></div>' : '<p class="sub">Todos os indicadores disponíveis já estão no painel.</p>') +
+      '<h3>Seções da Visão geral</h3><ol class="lista-ordem">' + pf.secoes.map(function (s, i) {
+        var def = SECOES_VISAO.find(function (x) { return x.id === s.id; });
+        return '<li><label class="check"><input type="checkbox" data-mudar="secao-vis" data-v="' + s.id + '"' + (s.visivel ? ' checked' : '') + '> ' + esc(def.nome) + '</label>' + setas(pf.secoes, i, 'sec') + '</li>';
+      }).join('') + '</ol>' +
+      '<h3>Ao abrir</h3><div class="linha-controles">' +
+      '<label class="campo"><span>Período</span><select id="pz-periodo" data-mudar="pref-periodo">' + opcoes(periodos, pf.periodo) + '</select></label>' +
+      '<label class="campo"><span>Métrica do gráfico</span><select id="pz-metrica" data-mudar="metrica">' + opcoes(metricas, pf.metrica) + '</select></label></div>' +
+      '<div class="rodape-modal">' +
+      (S.confirmarRedefinir
+        ? '<span class="sub">Voltar indicadores, seções, período e filtros ao padrão do painel?</span><button type="button" class="btn btn-perigo btn-peq" data-acao="redefinir-sim">Sim, redefinir</button><button type="button" class="btn btn-sec btn-peq" data-acao="redefinir-nao">Cancelar</button>'
+        : '<button type="button" class="btn btn-sec btn-peq" data-acao="redefinir" title="Volta ao padrão do painel. Visualizações salvas não são apagadas.">Redefinir</button><button type="button" class="btn btn-peq" data-acao="salvar-vis">Salvar visualização</button>') +
+      '</div></div>');
+    S.modalAtivo = 'personalizar';
+  }
+
+  function renderSalvarVis() {
+    var vis = lerVisualizacoes();
+    var nomes = Object.keys(vis.lista);
+    abrirModal('<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="sv-tit">' +
+      '<div class="card-topo"><h2 id="sv-tit">Salvar visualização</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
+      '<p class="sub">Guarda neste navegador os indicadores, as seções, o período e os filtros que estão na tela agora. Não guarda dados das alunas. Em outro computador ou navegador, as visualizações não aparecem.</p>' +
+      '<div class="linha-controles"><label class="campo campo-largo"><span>Nome</span><input type="text" id="sv-nome" maxlength="40" value="' + esc(S.visAtual || '') + '" placeholder="Ex.: Pauta da semana"></label></div>' +
+      '<label class="check"><input type="checkbox" id="sv-padrao"' + (vis.padrao && vis.padrao === S.visAtual ? ' checked' : '') + '> Abrir sempre o painel com esta visualização</label>' +
+      '<p class="erro" id="sv-erro" hidden></p>' +
+      '<div class="rodape-modal"><button type="button" class="btn btn-peq" data-acao="salvar-vis-ok">Salvar</button></div>' +
+      (nomes.length ? '<h3>Visualizações salvas</h3><ul class="lista-ordem">' + nomes.map(function (n) {
+        return '<li><span><strong>' + esc(n) + '</strong>' + (vis.padrao === n ? ' <span class="chip">abre sempre</span>' : '') + '</span>' +
+          '<button type="button" class="btn btn-sec btn-peq" data-acao="vis-usar" data-v="' + esc(n) + '">Aplicar</button>' +
+          '<button type="button" class="btn btn-sec btn-peq" data-acao="vis-excluir" data-v="' + esc(n) + '">Excluir</button></li>';
+      }).join('') + '</ul>' : '') + '</div>');
+    S.modalAtivo = 'salvar';
+  }
+
+  function renderAtualizar() {
+    var c = conj();
+    var fim = c.mensagens.length ? refFim() : null;
+    var ultima = 0;
+    c.mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
+    var arquivos = c.arquivos || [];
+    var h = '<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="at-tit">' +
+      '<div class="card-topo"><h2 id="at-tit">Atualizar dados</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
+      '<dl class="status-lista"><div><dt>Fonte na tela</dt><dd>' + (S.modo === 'demo' ? 'Exemplo fictício' : 'Dados importados nesta aba') + '</dd></div>' +
+      '<div><dt>Mensagens até</dt><dd>' + (ultima ? U.fmtDataHora(ultima) : 'sem mensagens') + '</dd></div>' +
+      '<div><dt>Análises calculadas às</dt><dd>' + U.fmtDataHora(S.calculadoEm) + '</dd></div></dl>';
+    if (S.modo === 'import' && arquivos.length) {
+      h += '<h3>Arquivos importados</h3><div class="tabela-rolagem"><table class="tab"><thead><tr><th>Arquivo</th><th>Canal</th><th>Novas</th><th>Repetidas ignoradas</th><th>Importado em</th></tr></thead><tbody>' +
+        arquivos.map(function (a) { return '<tr><td>' + esc(a.nome) + '</td><td>' + esc(CANAIS[a.canal] || a.canal) + '</td><td>' + a.novas + '</td><td>' + a.repetidas + '</td><td class="mono">' + U.fmtDataHora(a.quando) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    }
+    h += '<h3>O que você pode fazer</h3><ul class="acoes-explicadas">' +
+      '<li><button type="button" class="btn btn-peq" data-acao="ir-importar">Importar arquivo mais recente</button><span class="sub">Leva para a tela Importar. Mensagens que já estão no painel são reconhecidas e ignoradas, então pode importar a conversa inteira de novo.</span></li>' +
+      '<li><button type="button" class="btn btn-sec btn-peq" data-acao="recalcular"' + (pode('editar') ? '' : ' disabled') + '>Recalcular análises</button><span class="sub">Refaz a classificação automática das mensagens não revisadas com as palavras-chave atuais e recalcula todos os números. As revisadas não mudam.' + (pode('editar') ? '' : ' Precisa da função Edição ou Administração.') + '</span></li></ul>' +
+      '<p class="nota-peq">' + (S.modo === 'demo' ? 'O exemplo fictício não tem fonte externa: os dados não mudam ao atualizar. ' : '') + 'Atualização automática ainda não está disponível. Ela depende do bot do Telegram e do servidor do painel, que ainda não foram configurados.</p></div>';
+    abrirModal(h);
+    S.modalAtivo = 'atualizar';
+  }
+
+  function moverItem(lista, i, d) {
+    var j = i + d;
+    if (j < 0 || j >= lista.length) return;
+    var x = lista[i]; lista[i] = lista[j]; lista[j] = x;
+  }
+
+  function salvarVisualizacao() {
+    var nome = (document.getElementById('sv-nome').value || '').trim();
+    var erro = document.getElementById('sv-erro');
+    if (!nome) { erro.textContent = 'Dê um nome para a visualização.'; erro.hidden = false; return; }
+    var vis = lerVisualizacoes();
+    vis.lista[nome] = { prefs: JSON.parse(JSON.stringify(S.prefs)), filtros: JSON.parse(JSON.stringify(S.filtros)), salvoEm: Date.now() };
+    if (document.getElementById('sv-padrao').checked) vis.padrao = nome;
+    else if (vis.padrao === nome) vis.padrao = '';
+    if (!gravarVisualizacoes(vis)) { erro.textContent = 'Este navegador bloqueou o armazenamento (por exemplo, janela anônima). A visualização não foi salva.'; erro.hidden = false; return; }
+    S.visAtual = nome;
+    registrar('Salvou visualização', nome);
+    avisar('Visualização "' + nome + '" salva neste navegador.');
+    fecharModal();
+    render();
+  }
+
   /* ---------- Relatórios ---------- */
 
   function construirRelatorio() {
@@ -1191,8 +1509,16 @@
     return 'r' + (h >>> 0).toString(36);
   }
 
+  // Chave para reconhecer a mesma mensagem em importações repetidas (não guarda o remetente em texto).
+  function chaveMensagem(x) { return x.canal + '|' + Math.floor(x.data / 60000) + '|' + chaveRemetente(x.remetente) + '|' + U.norm(x.texto).slice(0, 200); }
+
   function confirmarImportacao() {
     var p = S.impPrevia, c = S.dados.import;
+    c.chaves = c.chaves || {};
+    c.arquivos = c.arquivos || [];
+    var total = p.mensagens.length;
+    p.mensagens = p.mensagens.filter(function (x) { var k = chaveMensagem(x); if (c.chaves[k]) return false; c.chaves[k] = 1; return true; });
+    var repetidas = total - p.mensagens.length;
     var porChave = {};
     Object.keys(c.alunas).forEach(function (id) { porChave[c.alunas[id].chave] = id; });
     var novas = p.mensagens.map(function (x) {
@@ -1241,13 +1567,15 @@
       if (!m.equipe && ehProva(m)) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
     });
     c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
-    registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' mensagens');
+    c.arquivos.push({ nome: p.arquivo, canal: (novas[0] || {}).canal || '', novas: novas.length, repetidas: repetidas, quando: Date.now() });
+    S.calculadoEm = Date.now();
+    registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' novas, ' + repetidas + ' repetidas ignoradas');
     S.impPrevia = null;
     S.modo = 'import';
     S.filtros.periodo = 'tudo';
     invalidarMascaras();
     S.aba = 'visao';
-    avisar('Importação concluída. Revise as classificações automáticas.');
+    avisar(novas.length + ' mensagens novas importadas' + (repetidas ? ', ' + repetidas + ' repetidas ignoradas' : '') + '. Revise as classificações automáticas.');
     render();
   }
 
@@ -1305,11 +1633,56 @@
 
   /* ---------- ações ---------- */
 
+  function irPara(aba) {
+    S.aba = aba; S.limite = 40; S.menuAberto = false;
+    if (location.hash !== '#' + aba) { try { history.replaceState(null, '', '#' + aba); } catch (e) { location.hash = aba; } }
+    render();
+    document.getElementById('conteudo').focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }
+
   function acharMsg(id) { return conj().mensagens.find(function (m) { return m.id === id; }); }
   function acharFoto(id) { return conj().midias.find(function (m) { return m.id === id; }); }
 
   var ACOES = {
-    aba: function (b) { S.aba = b.dataset.v; S.limite = 40; render(); document.getElementById('conteudo').focus({ preventScroll: true }); window.scrollTo(0, 0); },
+    aba: function (b) { irPara(b.dataset.v); },
+    menu: function () { S.menuAberto = !S.menuAberto; renderMoldura(); if (S.menuAberto) { var a = document.querySelector('#nav [aria-current="page"]'); if (a) a.focus(); } },
+    periodo: function (b) { S.filtros.periodo = b.dataset.v; S.limite = 40; render(); },
+    'toggle-filtros': function () { S.filtrosAbertos = !S.filtrosAbertos; renderFiltros(); var f = document.getElementById('f-canal'); if (S.filtrosAbertos && f) f.focus(); },
+    'remover-filtro': function (b) { S.filtros[b.dataset.k] = ''; render(); avisar('Filtro removido.'); },
+    personalizar: function (b) { renderPersonalizar(); if (b.dataset.foco === 'adicionar') { var x = document.getElementById('pz-novo'); if (x) x.focus(); } },
+    'salvar-vis': function () { renderSalvarVis(); var n = document.getElementById('sv-nome'); if (n) n.focus(); },
+    'salvar-vis-ok': function () { salvarVisualizacao(); },
+    'vis-usar': function (b) { var v = lerVisualizacoes().lista[b.dataset.v]; if (!v) return; aplicarVisualizacao(v); S.visAtual = b.dataset.v; fecharModal(); render(); avisar('Visualização "' + b.dataset.v + '" aplicada.'); },
+    'vis-excluir': function (b) { var vis = lerVisualizacoes(); delete vis.lista[b.dataset.v]; if (vis.padrao === b.dataset.v) vis.padrao = ''; gravarVisualizacoes(vis); if (S.visAtual === b.dataset.v) S.visAtual = ''; render(); renderSalvarVis(); avisar('Visualização excluída.'); },
+    mover: function (b) { moverItem(b.dataset.tipo === 'ind' ? S.prefs.indicadores : S.prefs.secoes, +b.dataset.i, +b.dataset.d); S.visAtual = ''; render(); renderPersonalizar(); },
+    'remover-ind': function (b) { S.prefs.indicadores = S.prefs.indicadores.filter(function (x) { return x !== b.dataset.v; }); S.visAtual = ''; render(); renderPersonalizar(); },
+    'adicionar-ind': function () { var v = document.getElementById('pz-novo').value; if (!v || !INDICADORES[v]) return; S.prefs.indicadores.push(v); S.visAtual = ''; render(); renderPersonalizar(); avisar('Indicador adicionado: ' + INDICADORES[v].nome); },
+    redefinir: function () { S.confirmarRedefinir = true; renderPersonalizar(); },
+    'redefinir-nao': function () { S.confirmarRedefinir = false; renderPersonalizar(); },
+    'redefinir-sim': function () {
+      S.prefs = prefsPadrao(); S.visAtual = ''; S.confirmarRedefinir = false;
+      S.filtros = { periodo: S.prefs.periodo, inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' };
+      registrar('Redefiniu o painel', 'Indicadores, seções, período e filtros voltaram ao padrão');
+      render(); renderPersonalizar(); avisar('Painel redefinido. Visualizações salvas continuam disponíveis.');
+    },
+    atualizar: function () { renderAtualizar(); },
+    'ir-importar': function () { fecharModal(); irPara('importar'); },
+    recalcular: function () {
+      if (!pode('editar')) return;
+      var n = 0;
+      conj().mensagens.forEach(function (m) { if (m.revisado || m.equipe) return; var a = C.classificar(m.texto, S.temas); m.auto = a; m.tipo = a.tipo; m.tema = a.tema; n++; });
+      S.calculadoEm = Date.now();
+      registrar('Recalculou análises', n + ' classificações automáticas refeitas');
+      render(); renderAtualizar(); avisar('Análises recalculadas. ' + n + ' classificações automáticas refeitas.');
+    },
+    'ir-alerta': function (b) {
+      var v = b.dataset.v;
+      if (v === 'dia-sem-resposta') { S.soSemResposta = true; S.soNaoRevisadas = false; irPara('mensagens'); }
+      else if (v === 'revisao') { S.soNaoRevisadas = true; S.soSemResposta = false; irPara('mensagens'); }
+      else irPara(v);
+    },
+    'ver-todos-assuntos': function () { S.verTodosAssuntos = !S.verTodosAssuntos; render(); },
     modo: function (b) { if (S.modo === b.dataset.v) { render(); return; } S.modo = b.dataset.v; S.limite = 40; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render(); },
     'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '' }; render(); },
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
@@ -1385,7 +1758,8 @@
       if (!pode('admin')) return;
       var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
       if (!printValido(p)) return;
-      p.status = 'aprovado'; p.aprovadoPor = PAPEIS[S.papel].nome === 'Administração' ? S.equipe[0] : PAPEIS[S.papel].nome; p.aprovadoEm = Date.now(); p.nota = '';
+      // Sem login real, registramos a função simulada. Com login, aqui entra o e-mail de quem aprovou.
+      p.status = 'aprovado'; p.aprovadoPor = PAPEIS[S.papel].nome + ' (login simulado)'; p.aprovadoEm = Date.now(); p.nota = '';
       registrar('Aprovou print', p.id + ' · ' + TIPOS_PRINT[p.tipo]);
       avisar('Print aprovado.');
       render();
@@ -1463,7 +1837,7 @@
     'imp-limpar-pedir': function () { S.confirmarLimpeza = true; render(); },
     'imp-limpar-cancelar': function () { S.confirmarLimpeza = false; render(); },
     'imp-limpar': function () {
-      S.dados.import = { alunas: {}, mensagens: [], midias: [], prints: [] };
+      S.dados.import = { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] };
       S.confirmarLimpeza = false;
       registrar('Apagou dados importados', 'Memória da aba');
       avisar('Dados importados apagados desta aba.');
@@ -1535,6 +1909,7 @@
         var a = C.classificar(m.texto, S.temas);
         m.auto = a; m.tipo = a.tipo; m.tema = a.tema; n++;
       });
+      S.calculadoEm = Date.now();
       registrar('Reclassificou mensagens', n + ' mensagens não revisadas');
       avisar(n + ' mensagens reclassificadas. As revisadas não mudaram.');
       render();
@@ -1576,7 +1951,16 @@
       gerarPrint();
       renderCompositor();
     },
-    'conv-sem': function (el) { S.conv.semResposta = el.checked; render(); }
+    'conv-sem': function (el) { S.conv.semResposta = el.checked; render(); },
+    metrica: function (el) { S.prefs.metrica = el.value; S.visAtual = ''; render(); if (S.modalAtivo === 'personalizar') renderPersonalizar(); },
+    'secao-vis': function (el) { var x = S.prefs.secoes.find(function (s) { return s.id === el.dataset.v; }); x.visivel = el.checked; S.visAtual = ''; render(); renderPersonalizar(); },
+    'pref-periodo': function (el) { S.prefs.periodo = el.value; S.filtros.periodo = el.value; S.visAtual = ''; render(); renderPersonalizar(); },
+    'vis-aplicar': function (el) {
+      if (!el.value) { S.visAtual = ''; return; }
+      var v = lerVisualizacoes().lista[el.value];
+      if (v) { aplicarVisualizacao(v); S.visAtual = el.value; render(); avisar('Visualização "' + el.value + '" aplicada.'); }
+    },
+    'so-sem-resp': function (el) { S.soSemResposta = el.checked; S.limite = 40; renderListaMensagens(); }
   };
 
   document.addEventListener('click', function (e) {
@@ -1600,14 +1984,34 @@
     tBusca = setTimeout(renderListaMensagens, 150);
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    S.editor = null; S.compositor = null; fecharModal();
+    var modal = document.getElementById('modal');
+    if (e.key === 'Escape') {
+      if (!modal.hidden) { S.editor = null; S.compositor = null; fecharModal(); }
+      else if (S.menuAberto) { S.menuAberto = false; renderMoldura(); document.getElementById('menu-btn').focus(); }
+      return;
+    }
+    if (e.key === 'Tab' && !modal.hidden) {
+      var foc = Array.prototype.filter.call(modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'), function (x) { return !x.disabled && x.offsetParent !== null; });
+      if (!foc.length) return;
+      var pri = foc[0], ult = foc[foc.length - 1];
+      if (e.shiftKey && document.activeElement === pri) { e.preventDefault(); ult.focus(); }
+      else if (!e.shiftKey && document.activeElement === ult) { e.preventDefault(); pri.focus(); }
+    }
   });
   var tResize;
   window.addEventListener('resize', function () { clearTimeout(tResize); tResize = setTimeout(desenharGrafico, 120); });
 
   /* ---------- início ---------- */
 
+  S.prefs = prefsPadrao();
+  (function () {
+    var vis = lerVisualizacoes();
+    if (vis.padrao && vis.lista[vis.padrao]) { aplicarVisualizacao(vis.lista[vis.padrao]); S.visAtual = vis.padrao; }
+  })();
+  window.addEventListener('hashchange', function () {
+    var h = location.hash.slice(1);
+    if (h !== S.aba && ABAS.some(function (a) { return a.id === h; })) irPara(h);
+  });
   S.dados.demo = P.demo.gerar(S.temas, S.equipe);
 
   // Prints de exemplo (fictícios): um aguardando aprovação e um aprovado, feitos com as cópias de rosto oculto.
@@ -1621,7 +2025,7 @@
         var f = fontes[i];
         d.prints.push({ id: 'p' + (d.prints.length + 1), fonte: 'midia', fonteId: f.id, alunaId: f.alunaId, tipo: 'antes_depois', formato: i ? 'stories' : 'feed',
           url: PR.antesDepois({ formato: i ? 'stories' : 'feed', layout: i ? 'empilhado' : 'lado', antes: im[0], depois: im[1], rotulos: true, periodo: f.descricao, fundo: 'claro' }),
-          status: i ? 'aprovado' : 'aguardando', criadoEm: Date.now() - (i + 2) * 3600000, aprovadoPor: i ? S.equipe[0] : null, aprovadoEm: i ? Date.now() - 1800000 : null, nota: '' });
+          status: i ? 'aprovado' : 'aguardando', criadoEm: Date.now() - (i + 2) * 3600000, aprovadoPor: i ? 'Administração (login simulado)' : null, aprovadoEm: i ? Date.now() - 1800000 : null, nota: '' });
       });
       render();
     });

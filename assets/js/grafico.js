@@ -35,7 +35,7 @@ window.Painel = window.Painel || {};
     var cada = Math.max(1, Math.ceil(n / (W < 520 ? 4 : 7)));
     for (var i = 0; i < n; i++) {
       if (i % cada !== 0 && i !== n - 1) continue;
-      if (i !== n - 1 && n - 1 - i < cada * 0.6) continue;
+      if (i !== n - 1 && x(n - 1) - x(i) < 52) continue; // evita sobrepor o último rótulo
       var anc = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
       s += '<text class="g-txt" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="' + anc + '">' + esc(eixo[i]) + '</text>';
     }
