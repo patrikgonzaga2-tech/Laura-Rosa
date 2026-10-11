@@ -18,10 +18,10 @@ Vamos preencher um item por vez. ✅ = já respondido.
 ## Telegram
 - [x] ✅ Bot @CorpoFelizPainelBot criado, privacidade desligada, token nos Secrets do Supabase (11/10/2026)
 - [x] ✅ Função `painel-telegram` publicada e ligada ao bot; tabelas `painel_` criadas no projeto "Corpo Feliz – CRM e Ideias"
-- [ ] Grupo de teste com o bot como administrador sem permissões, e teste de mensagem
-- [ ] O grupo permite adicionar bot?
+- [x] ✅ Grupo de teste "Painel": mensagem, resposta ligada à pergunta e foto (só referência) testadas
+- [x] ✅ Bot no grupo das alunas "MUSAS MENTE E CORPO FELIZ" (1054 membros), liberado em 11/10/2026
 - [x] ✅ Você é administradora do grupo
-- [ ] As alunas serão avisadas de que as mensagens são organizadas pela equipe?
+- [x] ✅ Aviso às alunas enviado no grupo (passo 7)
 
 ## Drive
 - [x] ✅ Google Drive, pasta CORPO FELIZ
