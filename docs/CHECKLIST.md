@@ -16,6 +16,9 @@ Vamos preencher um item por vez. ✅ = já respondido.
 - [ ] As alunas mandam muito áudio? (áudios não entram na análise)
 
 ## Telegram
+- [x] ✅ Bot @CorpoFelizPainelBot criado, privacidade desligada, token nos Secrets do Supabase (11/10/2026)
+- [x] ✅ Função `painel-telegram` publicada e ligada ao bot; tabelas `painel_` criadas no projeto "Corpo Feliz – CRM e Ideias"
+- [ ] Grupo de teste com o bot como administrador sem permissões, e teste de mensagem
 - [ ] O grupo permite adicionar bot?
 - [x] ✅ Você é administradora do grupo
 - [ ] As alunas serão avisadas de que as mensagens são organizadas pela equipe?
