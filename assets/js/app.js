@@ -3,8 +3,9 @@
  * Objetivo: juntar e organizar o que as alunas trazem (dores, objeções, resultados,
  * antes e depois, interação no grupo) e transformar em ideias de conteúdo e de cuidado.
  * O painel não responde ninguém e não guarda telefone ou contato.
- * Estado só em memória: ao recarregar a página tudo volta ao início.
- * Permissões aqui são SIMULADAS (não há login). A versão real valida no servidor.
+ * Sem o arquivo de configuração (assets/js/config.js) é um protótipo: estado só em memória e
+ * permissões SIMULADAS ("Ver como"). Com ele, o painel pede login (nuvem.js), a função vem do
+ * servidor e as mensagens do Telegram chegam "Ao vivo"; revisões e autorizações ficam salvas lá.
  */
 (function (P) {
   'use strict';
@@ -39,8 +40,16 @@
     { id: 'mensagens', nome: 'Mensagens e revisão', grupo: 'Dados' },
     { id: 'importar', nome: 'Importar dados', grupo: 'Dados' },
     { id: 'relatorios', nome: 'Relatórios', grupo: 'Dados' },
-    { id: 'config', nome: 'Configurações', grupo: '' }
+    { id: 'config', nome: 'Configurações', grupo: '' },
+    { id: 'usuarios', nome: 'Usuários', grupo: '' }
   ];
+  var MODOS = { demo: 'Exemplo fictício', import: 'Dados importados', nuvem: 'Ao vivo (Telegram)' };
+  var FUNCAO_TXT = {
+    admin: 'Tudo, inclusive usuários, assuntos, objeções e aprovação de prints.',
+    edicao: 'Revisa classificações e autorizações e vê o primeiro nome. Não exporta.',
+    exportacao: 'Baixa relatórios e prints. Não edita e não vê nomes.',
+    leitura: 'Só consulta. As alunas aparecem só por código.'
+  };
 
   var S = {
     modo: 'demo',
@@ -52,7 +61,11 @@
     objecoes: A.objecoesPadrao(),
     resultados: A.resultadosPadrao(),
     equipe: ['Coordenação', 'Equipe 1', 'Equipe 2'],
-    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] } },
+    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] }, nuvem: { alunas: {}, mensagens: [], midias: [], prints: [] } },
+    usuario: null,
+    nuvem: { carregando: false, erro: '', buscadoEm: 0, grupos: [] },
+    usu: { lista: null, carregando: false, erro: '', link: null, editando: '', ocupado: false },
+    registroServidor: null,
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
     soNaoRevisadas: false,
@@ -93,8 +106,17 @@
   function ehProva(m) { return m.tipo === 'depoimento' || m.tipo === 'evolucao'; }
 
   function registrar(acao, detalhe) {
-    S.auditoria.unshift({ quando: Date.now(), papel: PAPEIS[S.papel].nome, modo: S.modo === 'demo' ? 'Exemplo' : 'Importados', acao: acao, detalhe: detalhe || '' });
+    S.auditoria.unshift({ quando: Date.now(), papel: S.usuario ? quemSou() : PAPEIS[S.papel].nome, modo: MODOS[S.modo], acao: acao, detalhe: detalhe || '' });
   }
+  function quemSou() { return S.usuario ? (S.usuario.nome || S.usuario.email) : PAPEIS[S.papel].nome + ' (login simulado)'; }
+
+  // Com login, cada pessoa só vê os painéis liberados para ela. Configurações sempre aparece; Usuários só para Administração.
+  function abaPermitida(id) {
+    if (id === 'usuarios') return pode('admin');
+    if (!S.usuario || id === 'config' || S.usuario.funcao === 'admin') return true;
+    return (S.usuario.paineis || []).indexOf(id) !== -1;
+  }
+  function primeiraAba() { var a = ABAS.find(function (x) { return abaPermitida(x.id); }); return a ? a.id : 'config'; }
 
   function refFim() {
     var ms = conj().mensagens;
@@ -346,7 +368,7 @@
   }
 
   function semPermissao(acao) {
-    return '<p class="nota nota-trava"><span aria-hidden="true">🔒</span> Seu papel atual (' + esc(PAPEIS[S.papel].nome) + ') não permite ' + acao + '. Troque em "Ver como" para testar outro acesso.</p>';
+    return '<p class="nota nota-trava"><span aria-hidden="true">🔒</span> Sua função (' + esc(PAPEIS[S.papel].nome) + ') não permite ' + acao + '.' + (S.usuario ? ' Se precisar, peça à administração.' : ' Troque em "Ver como" para testar outro acesso.') + '</p>';
   }
 
   function subnav(chave, itens) {
@@ -368,26 +390,34 @@
   function renderMoldura() {
     document.querySelectorAll('[data-acao="modo"]').forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.v === S.modo));
+      if (b.dataset.v === 'nuvem') b.hidden = !S.usuario;
     });
     document.getElementById('papel').value = S.papel;
+    document.getElementById('papel-rotulo').hidden = !!S.usuario;
+    var conta = document.getElementById('conta');
+    conta.hidden = !S.usuario;
+    if (S.usuario) conta.querySelector('.conta-nome').textContent = (S.usuario.nome || S.usuario.email) + ' · ' + PAPEIS[S.papel].nome;
 
     var ultima = 0;
     conj().mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
-    document.getElementById('status-dados').textContent = (S.modo === 'demo' ? 'Exemplo fictício' : 'Dados importados') +
+    document.getElementById('status-dados').textContent = (S.nuvem.carregando && S.modo === 'nuvem' ? 'Buscando mensagens…' : MODOS[S.modo]) +
       (ultima ? ' · mensagens até ' + U.fmtDataHora(ultima) : ' · sem mensagens') + ' · análises às ' + U.fmtHora(S.calculadoEm);
 
     var faixa = document.getElementById('faixa');
     if (S.modo === 'demo') {
       faixa.className = 'faixa faixa-demo';
-      faixa.innerHTML = '<strong>Dados fictícios.</strong> Pessoas, mensagens e imagens são exemplos. Login e permissões são simulados.';
+      faixa.innerHTML = '<strong>Dados fictícios.</strong> Pessoas, mensagens e imagens são exemplos.' + (S.usuario ? '' : ' Login e permissões são simulados.');
+    } else if (S.modo === 'nuvem') {
+      faixa.className = 'faixa faixa-nuvem';
+      faixa.innerHTML = '<strong>Dados reais do grupo do Telegram.</strong> Revisões e autorizações ficam salvas no servidor. Fotos e prints montados aqui ainda ficam só nesta aba.';
     } else {
       faixa.className = 'faixa faixa-import';
-      faixa.innerHTML = '<strong>Dados importados.</strong> Ficam só nesta aba e somem ao recarregar. Login e permissões são simulados.';
+      faixa.innerHTML = '<strong>Dados importados.</strong> Ficam só nesta aba e somem ao recarregar.' + (S.usuario ? '' : ' Login e permissões são simulados.');
     }
 
     var aguardando = (conj().prints || []).filter(function (x) { return x.status === 'aguardando'; }).length;
     var grupos = [];
-    ABAS.forEach(function (a) { var g = grupos.find(function (x) { return x.nome === a.grupo; }); if (!g) grupos.push(g = { nome: a.grupo, abas: [] }); g.abas.push(a); });
+    ABAS.filter(function (a) { return abaPermitida(a.id); }).forEach(function (a) { var g = grupos.find(function (x) { return x.nome === a.grupo; }); if (!g) grupos.push(g = { nome: a.grupo, abas: [] }); g.abas.push(a); });
     var nav = document.getElementById('nav');
     nav.innerHTML = grupos.map(function (g) {
       return '<div class="nav-grupo">' + (g.nome ? '<span class="nav-titulo">' + esc(g.nome) + '</span>' : '') + g.abas.map(function (a) {
@@ -443,17 +473,25 @@
   }
 
   function render() {
+    if (!abaPermitida(S.aba)) S.aba = primeiraAba();
     renderMoldura();
     renderFiltros();
     var el = document.getElementById('aba');
-    var semDados = !conj().mensagens.length && ['importar', 'config'].indexOf(S.aba) === -1 && !(S.aba === 'resultados' && S.subRes === 'fotos' && S.modo === 'import');
+    var semDados = !conj().mensagens.length && ['importar', 'config', 'usuarios'].indexOf(S.aba) === -1 && !(S.aba === 'resultados' && S.subRes === 'fotos' && S.modo === 'import');
+    if (semDados && S.modo === 'nuvem') {
+      el.innerHTML = S.nuvem.carregando ? vazio('Buscando mensagens…', 'Um instante.') : S.nuvem.erro ?
+        vazio('Não consegui buscar as mensagens', esc(S.nuvem.erro), '<button type="button" class="btn" data-acao="nuvem-recarregar">Tentar de novo</button>') :
+        vazio('Ainda não chegaram mensagens', 'O bot já está no grupo. Assim que as alunas escreverem no grupo do Telegram, as mensagens aparecem aqui. Use "Atualizar dados" para buscar as novas.',
+          '<button type="button" class="btn" data-acao="nuvem-recarregar">Buscar agora</button>');
+      return;
+    }
     if (semDados) {
       el.innerHTML = vazio('Nenhum dado importado ainda',
         'Para ver seus dados aqui, importe um arquivo exportado do WhatsApp, do Telegram ou uma planilha. Os dados ficam só nesta aba e não se misturam com o exemplo fictício.',
         '<button type="button" class="btn" data-acao="aba" data-v="importar">Ir para Importar</button>');
       return;
     }
-    var fn = { visao: abaVisao, dia: abaDia, prints: abaPrints, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig }[S.aba];
+    var fn = { visao: abaVisao, dia: abaDia, prints: abaPrints, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig, usuarios: abaUsuarios }[S.aba];
     el.innerHTML = fn();
     if (S.aba === 'visao') desenharGrafico();
     if (S.aba === 'mensagens') renderListaMensagens();
@@ -1266,7 +1304,9 @@
     var arquivos = c.arquivos || [];
     var h = '<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="at-tit">' +
       '<div class="card-topo"><h2 id="at-tit">Atualizar dados</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
-      '<dl class="status-lista"><div><dt>Fonte na tela</dt><dd>' + (S.modo === 'demo' ? 'Exemplo fictício' : 'Dados importados nesta aba') + '</dd></div>' +
+      '<dl class="status-lista"><div><dt>Fonte na tela</dt><dd>' + (S.modo === 'import' ? 'Dados importados nesta aba' : MODOS[S.modo]) + '</dd></div>' +
+      (S.modo === 'nuvem' ? '<div><dt>Grupos</dt><dd>' + (S.nuvem.grupos.length ? S.nuvem.grupos.map(esc).join(', ') : 'nenhuma mensagem ainda') + '</dd></div>' +
+        '<div><dt>Última busca</dt><dd>' + (S.nuvem.buscadoEm ? U.fmtDataHora(S.nuvem.buscadoEm) : 'ainda não') + '</dd></div>' : '') +
       '<div><dt>Mensagens até</dt><dd>' + (ultima ? U.fmtDataHora(ultima) : 'sem mensagens') + '</dd></div>' +
       '<div><dt>Análises calculadas às</dt><dd>' + U.fmtDataHora(S.calculadoEm) + '</dd></div></dl>';
     if (S.modo === 'import' && arquivos.length) {
@@ -1274,9 +1314,12 @@
         arquivos.map(function (a) { return '<tr><td>' + esc(a.nome) + '</td><td>' + esc(CANAIS[a.canal] || a.canal) + '</td><td>' + a.novas + '</td><td>' + a.repetidas + '</td><td class="mono">' + U.fmtDataHora(a.quando) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     }
     h += '<h3>O que você pode fazer</h3><ul class="acoes-explicadas">' +
-      '<li><button type="button" class="btn btn-peq" data-acao="ir-importar">Importar arquivo mais recente</button><span class="sub">Leva para a tela Importar. Mensagens que já estão no painel são reconhecidas e ignoradas, então pode importar a conversa inteira de novo.</span></li>' +
+      (S.modo === 'nuvem' ? '<li><button type="button" class="btn btn-peq" data-acao="nuvem-recarregar">Buscar mensagens novas</button><span class="sub">Traz do servidor tudo o que chegou do grupo do Telegram nos últimos 60 dias. O painel também busca sozinho a cada 5 minutos enquanto você está na Visão geral ou em Conversas do dia.</span></li>' : '') +
+      '<li><button type="button" class="btn btn-peq' + (S.modo === 'nuvem' ? ' btn-sec' : '') + '" data-acao="ir-importar">Importar arquivo mais recente</button><span class="sub">Leva para a tela Importar. Mensagens que já estão no painel são reconhecidas e ignoradas, então pode importar a conversa inteira de novo.</span></li>' +
       '<li><button type="button" class="btn btn-sec btn-peq" data-acao="recalcular"' + (pode('editar') ? '' : ' disabled') + '>Recalcular análises</button><span class="sub">Refaz a classificação automática das mensagens não revisadas com as palavras-chave atuais e recalcula todos os números. As revisadas não mudam.' + (pode('editar') ? '' : ' Precisa da função Edição ou Administração.') + '</span></li></ul>' +
-      '<p class="nota-peq">' + (S.modo === 'demo' ? 'O exemplo fictício não tem fonte externa: os dados não mudam ao atualizar. ' : '') + 'Atualização automática ainda não está disponível. Ela depende do bot do Telegram e do servidor do painel, que ainda não foram configurados.</p></div>';
+      '<p class="nota-peq">' + (S.modo === 'demo' ? 'O exemplo fictício não tem fonte externa: os dados não mudam ao atualizar. ' : '') +
+      (S.usuario ? (S.modo === 'nuvem' ? 'O WhatsApp ainda não entra automaticamente: por enquanto, importe a conversa exportada em "Importar dados".' : 'Para ver as mensagens do Telegram que chegam sozinhas, escolha "Ao vivo" no topo.') :
+        'Atualização automática só no painel online, com login.') + '</p></div>';
     abrirModal(h);
     S.modalAtivo = 'atualizar';
   }
@@ -1540,8 +1583,23 @@
       return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, conversa: x.canal + ':' + p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, autor: eq ? x.remetente : null,
         alunaId: alunaId, tipo: eq ? 'outro' : auto.tipo, tema: auto.tema, auto: auto, revisado: eq, aut: null, resposta: null, respondeA: null, idOrigem: x.idOrigem, respondeOrigem: x.respondeOrigem };
     });
-    // Liga cada pergunta à resposta da equipe.
-    // Telegram: pelo "responder" da mensagem. Sem isso: primeira mensagem da equipe depois (WhatsApp até 24 h; grupo até 1 h), marcada como estimada.
+    ligarRespostas(novas);
+    c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
+    c.arquivos.push({ nome: p.arquivo, canal: (novas[0] || {}).canal || '', novas: novas.length, repetidas: repetidas, quando: Date.now() });
+    S.calculadoEm = Date.now();
+    registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' novas, ' + repetidas + ' repetidas ignoradas');
+    S.impPrevia = null;
+    S.modo = 'import';
+    S.filtros.periodo = 'tudo';
+    invalidarMascaras();
+    S.aba = 'visao';
+    avisar(novas.length + ' mensagens novas importadas' + (repetidas ? ', ' + repetidas + ' repetidas ignoradas' : '') + '. Revise as classificações automáticas.');
+    render();
+  }
+
+  // Liga cada pergunta à resposta da equipe.
+  // Telegram: pelo "responder" da mensagem. Sem isso: primeira mensagem da equipe depois (WhatsApp até 24 h; grupo até 1 h), marcada como estimada.
+  function ligarRespostas(novas) {
     var porOrigem = {};
     novas.forEach(function (m) { if (m.idOrigem != null) porOrigem[m.idOrigem] = m; });
     novas.forEach(function (m) {
@@ -1564,26 +1622,67 @@
     });
     novas.forEach(function (m) {
       delete m.idOrigem; delete m.respondeOrigem;
-      if (!m.equipe && ehProva(m)) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
+      if (!m.equipe && ehProva(m) && !m.aut) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
     });
-    c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
-    c.arquivos.push({ nome: p.arquivo, canal: (novas[0] || {}).canal || '', novas: novas.length, repetidas: repetidas, quando: Date.now() });
-    S.calculadoEm = Date.now();
-    registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' novas, ' + repetidas + ' repetidas ignoradas');
-    S.impPrevia = null;
-    S.modo = 'import';
-    S.filtros.periodo = 'tudo';
-    invalidarMascaras();
-    S.aba = 'visao';
-    avisar(novas.length + ' mensagens novas importadas' + (repetidas ? ', ' + repetidas + ' repetidas ignoradas' : '') + '. Revise as classificações automáticas.');
-    render();
+  }
+
+  /* ---------- Ao vivo (servidor) ---------- */
+
+  var NOMES_MIDIA = { foto: 'foto', video: 'vídeo', audio: 'áudio', video_redondo: 'vídeo', documento: 'arquivo', figurinha: 'figurinha' };
+
+  // Converte as mensagens do servidor para o formato do painel. O código da aluna vem do pseudônimo (não do Telegram).
+  function montarNuvem(r) {
+    var alunas = {}, grupos = {};
+    var novas = (r.mensagens || []).map(function (x) {
+      var eq = !!x.equipe, alunaId = null;
+      if (x.grupo) grupos[x.grupo] = 1;
+      if (!eq) {
+        var ref = x.autor || 'sem-autor';
+        alunaId = 'T-' + ref.replace(/^tg_/, '').slice(0, 5).toUpperCase();
+        if (!alunas[alunaId]) alunas[alunaId] = { id: alunaId, chave: ref, nome: x.nome || 'Aluna', sobrenome: '' };
+        else if (x.nome) alunas[alunaId].nome = x.nome;
+      }
+      var texto = x.texto || '[' + (NOMES_MIDIA[x.midia] || 'mídia') + ' sem legenda]';
+      var auto = C.classificar(x.texto || '', S.temas);
+      var rev = x.rev || {};
+      var m = { id: 'n' + x.id, dbId: x.id, origem: 'nuvem', conversa: (x.origem || 'telegram') + ':' + x.chat, canal: x.origem === 'whatsapp' ? 'whatsapp' : 'telegram',
+        data: Date.parse(x.data), texto: texto, equipe: eq, autor: eq ? (x.nome || 'Equipe') : null, alunaId: alunaId,
+        tipo: eq ? 'outro' : (rev.revisado && rev.tipo) || auto.tipo, tema: (rev.revisado && rev.tema) || auto.tema, auto: auto,
+        revisado: eq || !!rev.revisado, aut: null, resposta: null, respondeA: null, midia: x.midia || null,
+        idOrigem: x.chat + ':' + x.msg, respondeOrigem: x.responde ? x.chat + ':' + x.responde : null };
+      if (rev.aut) m.aut = { status: rev.aut, confirmadoPor: rev.aut_por || '', data: rev.aut_em ? Date.parse(rev.aut_em) : null };
+      return m;
+    });
+    ligarRespostas(novas);
+    var antigo = S.dados.nuvem;
+    return { alunas: alunas, mensagens: novas, midias: antigo.midias, prints: antigo.prints, grupos: Object.keys(grupos) };
+  }
+
+  function carregarNuvem(silencioso) {
+    if (!S.usuario || S.nuvem.carregando) return Promise.resolve();
+    S.nuvem.carregando = true; S.nuvem.erro = '';
+    if (!silencioso && S.modo === 'nuvem') render();
+    return P.nuvem.mensagens(60).then(function (r) {
+      var d = montarNuvem(r || {});
+      S.dados.nuvem = d;
+      S.nuvem.grupos = d.grupos;
+      S.nuvem.buscadoEm = Date.now();
+      S.calculadoEm = Date.now();
+    }).catch(function (e) {
+      S.nuvem.erro = P.nuvem.traduzir(e);
+      if (!silencioso) avisar(S.nuvem.erro);
+    }).then(function () {
+      S.nuvem.carregando = false;
+      if (S.modo === 'nuvem' && !(silencioso && S.modalAtivo)) render();
+      else renderMoldura();
+    });
   }
 
   /* ---------- Configurações ---------- */
 
   function abaConfig() {
     var adm = pode('admin');
-    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, objeções, equipe, permissões e registro de ações. Neste protótipo tudo fica só nesta aba.</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, objeções, equipe, permissões e registro de ações. ' + (S.usuario ? 'Por enquanto, mudanças em assuntos, objeções e equipe valem só nesta aba e voltam ao padrão ao recarregar.' : 'Neste protótipo tudo fica só nesta aba.') + '</p></div>';
     h += '<section class="painel-card"><h2>Assuntos</h2><p class="sub">As palavras-chave alimentam a classificação automática. O "tipo" decide se o assunto vira pauta de conteúdo, bloqueio de mentalidade, ajuste na entrega ou prova social. Mensagens já revisadas não são alteradas.</p>';
     if (!adm) h += semPermissao('editar assuntos');
     h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Assunto</th><th>Tipo</th><th>Palavras-chave (separe por vírgula)</th><th>Ideia de conteúdo</th><th>Ângulo do seu método (ou ação, se for entrega)</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
@@ -1617,17 +1716,126 @@
       S.equipe.map(function (n, i) { return '<li>' + esc(n) + (adm && S.equipe.length > 1 ? ' <button type="button" class="link" data-acao="equipe-remover" data-i="' + i + '">remover</button>' : '') + '</li>'; }).join('') + '</ul>' +
       (adm ? '<div class="linha-controles"><label class="campo"><span>Nome</span><input type="text" id="equipe-novo"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="equipe-adicionar">Adicionar</button></div></div>' : semPermissao('editar a equipe')) +
       '</section>';
-    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">Simulação. Na versão com servidor, isso é garantido pelo login e pelas regras do banco de dados. O painel não guarda telefone nem contato de ninguém.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver primeiro nome</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
+    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">' + (S.usuario ? 'A função de cada pessoa é definida em Usuários. O primeiro nome só sai do servidor para Administração e Edição.' : 'Simulação. Na versão com servidor, isso é garantido pelo login e pelas regras do banco de dados.') + ' O painel não guarda telefone nem contato de ninguém.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver primeiro nome</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
       Object.keys(PAPEIS).map(function (k) {
         var p = PAPEIS[k];
         function c(v) { return v ? '<span class="sim">Sim</span>' : '<span class="nao">Não</span>'; }
         return '<tr' + (k === S.papel ? ' class="atual"' : '') + '><th>' + esc(p.nome) + '</th><td>' + c(true) + '</td><td>' + c(p.editar) + '</td><td>' + c(p.nome1) + '</td><td>' + c(p.exportar) + '</td><td>' + c(p.admin) + '</td></tr>';
       }).join('') + '</tbody></table></div></section></div>';
 
-    h += '<section class="painel-card"><h2>Registro de ações</h2><p class="sub">Classificações, autorizações, cópias tratadas, importações e exportações. Neste protótipo some ao recarregar. Na versão real fica guardado no servidor.</p>' +
+    if (S.usuario && adm) {
+      var R = S.registroServidor;
+      h += '<section class="painel-card"><h2>Registro do servidor</h2><p class="sub">Revisões, autorizações, convites e mudanças de usuários, com quem fez. Fica guardado no servidor.</p>' +
+        (!R ? '<button type="button" class="btn btn-sec" data-acao="registro-servidor">Ver registro</button>' : R.carregando ? '<p class="sub">Carregando…</p>' : R.erro ? '<p class="erro">' + esc(R.erro) + '</p>' :
+          R.lista.length ? '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Quando</th><th>Quem</th><th>Tipo</th><th>Detalhe</th></tr></thead><tbody>' +
+            R.lista.map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(Date.parse(a.quando)) + '</td><td>' + esc(a.usuario || 'sistema') + '</td><td>' + esc(a.tipo) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+            '<button type="button" class="btn btn-sec btn-peq" data-acao="registro-servidor">Atualizar</button>' : '<p class="sub">Nada registrado ainda.</p>') + '</section>';
+    }
+    h += '<section class="painel-card"><h2>Registro de ações' + (S.usuario ? ' nesta aba' : '') + '</h2><p class="sub">Classificações, autorizações, cópias tratadas, importações e exportações. ' + (S.usuario ? 'Some ao recarregar. O que vai para o servidor aparece no registro acima.' : 'Neste protótipo some ao recarregar. Na versão real fica guardado no servidor.') + '</p>' +
       (!adm ? semPermissao('ver o registro de ações') : S.auditoria.length ? '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Quando</th><th>Função</th><th>Dados</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>' +
         S.auditoria.slice(0, 200).map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(a.quando) + '</td><td>' + esc(a.papel) + '</td><td>' + esc(a.modo) + '</td><td>' + esc(a.acao) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">Nenhuma ação registrada ainda.</p>') +
       '</section>';
+    return h;
+  }
+
+  /* ---------- Usuários ---------- */
+
+  var PAINEIS_USU = ABAS.filter(function (a) { return a.id !== 'config' && a.id !== 'usuarios'; });
+  var SITUACAO = { sem_convite: 'Ainda não convidada', convite_enviado: 'Convite enviado, senha ainda não criada', ativa: 'Acesso ativo', desativada: 'Desativada' };
+
+  function paineisMarcados(prefixo) {
+    return PAINEIS_USU.filter(function (a) { var x = document.getElementById(prefixo + a.id); return x && x.checked; }).map(function (a) { return a.id; });
+  }
+
+  function escolhaPaineis(prefixo, marcados) {
+    return '<fieldset class="paineis-escolha"><legend>Painéis que a pessoa vê</legend>' + PAINEIS_USU.map(function (a) {
+      return '<label class="check"><input type="checkbox" id="' + prefixo + a.id + '"' + (marcados.indexOf(a.id) !== -1 ? ' checked' : '') + '> ' + esc(a.nome) + '</label>';
+    }).join('') + '<p class="nota-peq">Configurações aparece para todos (só a Administração altera). Para a Administração, todos os painéis ficam liberados.</p></fieldset>';
+  }
+
+  function escolhaFuncao(id, atual) {
+    return '<label class="campo"><span>Função</span><select id="' + id + '">' + Object.keys(PAPEIS).map(function (k) {
+      return '<option value="' + k + '"' + (k === atual ? ' selected' : '') + '>' + esc(PAPEIS[k].nome) + '</option>';
+    }).join('') + '</select></label>';
+  }
+
+  function carregarUsuarios() {
+    if (!S.usuario || !pode('admin')) return;
+    S.usu.carregando = true; S.usu.erro = '';
+    if (S.aba === 'usuarios') render();
+    P.nuvem.usuarios({ acao: 'listar' }).then(function (r) { S.usu.lista = r.usuarios || []; })
+      .catch(function (e) { S.usu.erro = e.message || P.nuvem.traduzir(e); })
+      .then(function () { S.usu.carregando = false; if (S.aba === 'usuarios') render(); });
+  }
+
+  function mostrarConvite(email, r) {
+    if (!r) return;
+    if (r.enviado) { S.usu.link = null; avisar('Convite enviado para ' + email + '. Peça para conferir também o spam.'); }
+    else if (r.link) S.usu.link = { email: email, link: r.link, motivo: r.motivo || '' };
+    else avisar('O convite não saiu: ' + (r.motivo || r.erro || 'motivo desconhecido'));
+  }
+
+  function salvarUsuario(dados, ok) {
+    if (S.usu.ocupado) return;
+    S.usu.ocupado = true; S.usu.link = null; render();
+    P.nuvem.usuarios(Object.assign({ acao: 'salvar' }, dados)).then(function (r) {
+      S.usu.editando = '';
+      avisar(ok);
+      if (r.convite) mostrarConvite(dados.email, r.convite);
+    }).catch(function (e) { avisar(e.message || P.nuvem.traduzir(e)); })
+      .then(function () { S.usu.ocupado = false; carregarUsuarios(); });
+  }
+
+  function abaUsuarios() {
+    var h = '<div class="cabeca-aba"><h1>Usuários</h1><p class="sub">Quem entra no painel, com qual função e quais painéis vê. A senha é criada pela própria pessoa, pelo link que chega no e-mail. Ninguém da equipe vê ou digita a senha de outra pessoa.</p></div>';
+    if (!S.usuario) return h + vazio('Disponível no painel online', 'Neste protótipo sem login, use "Ver como" no topo para simular as funções. No painel publicado, a Administração cadastra as pessoas aqui.');
+    var U2 = S.usu, dis = U2.ocupado ? ' disabled' : '';
+    if (U2.link) {
+      h += '<section class="painel-card card-destaque" role="alert"><h2>O e-mail de convite não saiu</h2><p>Envie este link você mesma para <strong>' + esc(U2.link.email) + '</strong> (por exemplo, pelo WhatsApp). Ele abre a tela de criar senha, funciona uma vez só e expira em pouco tempo. Não envie para outra pessoa.</p>' +
+        (U2.link.motivo ? '<p class="nota-peq">Motivo informado pelo servidor: ' + esc(U2.link.motivo) + '</p>' : '') +
+        '<label class="campo campo-largo"><span>Link de acesso</span><input type="text" id="usu-link" readonly value="' + esc(U2.link.link) + '"></label>' +
+        '<div class="linha-controles"><button type="button" class="btn" data-acao="usu-copiar-link">Copiar link</button><button type="button" class="btn btn-sec" data-acao="usu-fechar-link">Já enviei, fechar</button></div></section>';
+    }
+    h += '<section class="painel-card"><h2>Adicionar pessoa</h2><div class="form-usuario">' +
+      '<label class="campo"><span>E-mail</span><input type="email" id="un-email" autocomplete="off" placeholder="nome@exemplo.com"></label>' +
+      '<label class="campo"><span>Nome (opcional)</span><input type="text" id="un-nome" maxlength="60" placeholder="Como aparece no painel"></label>' +
+      escolhaFuncao('un-funcao', 'leitura') + '</div>' +
+      escolhaPaineis('un-p-', PAINEIS_USU.map(function (a) { return a.id; })) +
+      '<label class="check"><input type="checkbox" id="un-convidar" checked> Enviar o convite por e-mail agora</label>' +
+      '<p class="erro" id="un-erro" hidden></p>' +
+      '<div class="linha-controles"><button type="button" class="btn" data-acao="usu-adicionar"' + dis + '>Adicionar</button></div></section>';
+
+    h += '<section class="painel-card"><div class="card-topo"><h2>Pessoas com acesso</h2><button type="button" class="btn btn-sec btn-peq" data-acao="usu-recarregar"' + dis + '>Atualizar lista</button></div>';
+    if (U2.carregando && !U2.lista) h += '<p class="sub">Carregando…</p>';
+    else if (U2.erro) h += '<p class="erro">' + esc(U2.erro) + '</p>';
+    else if (U2.lista) {
+      h += '<ul class="lista-usuarios">' + U2.lista.map(function (u) {
+        var todos = u.funcao === 'admin' || PAINEIS_USU.every(function (a) { return u.paineis.indexOf(a.id) !== -1; });
+        var resumo = todos ? 'Todos os painéis' : PAINEIS_USU.filter(function (a) { return u.paineis.indexOf(a.id) !== -1; }).map(function (a) { return a.nome; }).join(', ');
+        var li = '<li class="usuario' + (u.ativo ? '' : ' usuario-off') + '"><div class="usuario-topo"><div><strong>' + esc(u.nome || u.email) + '</strong>' + (u.eu ? ' <span class="chip">você</span>' : '') +
+          (u.nome ? '<br><span class="sub">' + esc(u.email) + '</span>' : '') + '</div><span class="chip chip-funcao">' + esc(PAPEIS[u.funcao].nome) + '</span></div>' +
+          '<p class="sub">' + esc(SITUACAO[u.situacao] || u.situacao) + (u.situacao === 'ativa' && u.ultimo_acesso ? ' · último acesso ' + U.fmtDataHora(Date.parse(u.ultimo_acesso)) : '') +
+          (u.situacao === 'convite_enviado' && u.convidado_em ? ' · enviado em ' + U.fmtDataHora(Date.parse(u.convidado_em)) : '') + '</p>' +
+          '<p class="sub">Vê: ' + esc(resumo) + '</p>';
+        if (S.usu.editando === u.email) {
+          li += '<div class="form-usuario"><label class="campo"><span>Nome</span><input type="text" id="ue-nome" maxlength="60" value="' + esc(u.nome || '') + '"></label>' + escolhaFuncao('ue-funcao', u.funcao) + '</div>' +
+            escolhaPaineis('ue-p-', u.paineis) +
+            '<div class="linha-controles"><button type="button" class="btn" data-acao="usu-salvar" data-email="' + esc(u.email) + '"' + dis + '>Salvar</button><button type="button" class="btn btn-sec" data-acao="usu-cancelar">Cancelar</button></div>';
+        } else {
+          li += '<div class="linha-controles">' +
+            '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-editar" data-email="' + esc(u.email) + '">Editar função e painéis</button>' +
+            (u.ativo && u.situacao !== 'ativa' ? '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-convidar" data-email="' + esc(u.email) + '"' + dis + '>' + (u.situacao === 'sem_convite' ? 'Enviar convite' : 'Reenviar convite') + '</button>' : '') +
+            (u.ativo && u.situacao === 'ativa' && !u.eu ? '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-convidar" data-email="' + esc(u.email) + '"' + dis + '>Enviar link de nova senha</button>' : '') +
+            (u.eu ? '' : '<button type="button" class="btn btn-sec btn-peq' + (u.ativo ? ' btn-perigo' : '') + '" data-acao="usu-ativo" data-email="' + esc(u.email) + '"' + dis + '>' + (u.ativo ? 'Desativar acesso' : 'Reativar acesso') + '</button>') +
+            '</div>';
+        }
+        return li + '</li>';
+      }).join('') + '</ul>';
+    }
+    h += '</section>';
+    h += '<section class="painel-card"><h2>O que cada função pode fazer</h2><dl class="funcoes">' + Object.keys(PAPEIS).map(function (k) {
+      return '<div><dt>' + esc(PAPEIS[k].nome) + '</dt><dd>' + esc(FUNCAO_TXT[k]) + '</dd></div>';
+    }).join('') + '</dl><p class="nota-peq">A função e o primeiro nome são conferidos no servidor a cada busca. A escolha de painéis organiza o menu de cada pessoa.</p></section>';
     return h;
   }
 
@@ -1637,6 +1845,7 @@
     S.aba = aba; S.limite = 40; S.menuAberto = false;
     if (location.hash !== '#' + aba) { try { history.replaceState(null, '', '#' + aba); } catch (e) { location.hash = aba; } }
     render();
+    if (S.aba === 'usuarios' && S.usuario && !S.usu.lista && !S.usu.carregando) carregarUsuarios();
     document.getElementById('conteudo').focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
@@ -1683,7 +1892,53 @@
       else irPara(v);
     },
     'ver-todos-assuntos': function () { S.verTodosAssuntos = !S.verTodosAssuntos; render(); },
-    modo: function (b) { if (S.modo === b.dataset.v) { render(); return; } S.modo = b.dataset.v; S.limite = 40; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render(); },
+    modo: function (b) {
+      if (S.modo === b.dataset.v) { render(); return; }
+      S.modo = b.dataset.v; S.limite = 40; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render();
+      if (S.modo === 'nuvem' && Date.now() - S.nuvem.buscadoEm > 60000) carregarNuvem();
+    },
+    sair: function () { P.nuvem.sair(); },
+    'nuvem-recarregar': function () {
+      if (S.modo !== 'nuvem') S.modo = 'nuvem';
+      var modal = S.modalAtivo === 'atualizar';
+      carregarNuvem().then(function () { if (modal) renderAtualizar(); if (!S.nuvem.erro) avisar('Mensagens atualizadas.'); });
+    },
+    'registro-servidor': function () {
+      S.registroServidor = { carregando: true };
+      render();
+      P.nuvem.registro().then(function (l) { S.registroServidor = { lista: l || [] }; }).catch(function (e) { S.registroServidor = { erro: P.nuvem.traduzir(e) }; }).then(render);
+    },
+    'usu-recarregar': function () { carregarUsuarios(); },
+    'usu-editar': function (b) { S.usu.editando = b.dataset.email; S.usu.link = null; render(); var x = document.getElementById('ue-funcao'); if (x) x.focus(); },
+    'usu-cancelar': function () { S.usu.editando = ''; render(); },
+    'usu-salvar': function (b) {
+      var email = b.dataset.email, u = (S.usu.lista || []).find(function (x) { return x.email === email; });
+      if (!u) return;
+      salvarUsuario({ email: email, nome: document.getElementById('ue-nome').value, funcao: document.getElementById('ue-funcao').value, paineis: paineisMarcados('ue-p-'), ativo: u.ativo }, 'Alterações salvas.');
+    },
+    'usu-ativo': function (b) {
+      var u = (S.usu.lista || []).find(function (x) { return x.email === b.dataset.email; });
+      if (!u) return;
+      salvarUsuario({ email: u.email, nome: u.nome, funcao: u.funcao, paineis: u.paineis, ativo: !u.ativo }, u.ativo ? 'Acesso desativado. A pessoa não consegue mais ver os dados.' : 'Acesso reativado.');
+    },
+    'usu-adicionar': function () {
+      var email = document.getElementById('un-email').value.trim().toLowerCase();
+      var erro = document.getElementById('un-erro');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { erro.textContent = 'Confira o e-mail.'; erro.hidden = false; return; }
+      if ((S.usu.lista || []).some(function (x) { return x.email === email; })) { erro.textContent = 'Este e-mail já está na lista.'; erro.hidden = false; return; }
+      var paineis = paineisMarcados('un-p-');
+      if (!paineis.length) { erro.textContent = 'Escolha pelo menos um painel.'; erro.hidden = false; return; }
+      salvarUsuario({ email: email, nome: document.getElementById('un-nome').value, funcao: document.getElementById('un-funcao').value, paineis: paineis, ativo: true, convidar: document.getElementById('un-convidar').checked }, 'Pessoa adicionada.');
+    },
+    'usu-convidar': function (b) {
+      if (S.usu.ocupado) return;
+      S.usu.ocupado = true; S.usu.link = null; render();
+      P.nuvem.usuarios({ acao: 'convidar', email: b.dataset.email }).then(function (r) { mostrarConvite(b.dataset.email, r); })
+        .catch(function (e) { avisar(e.message || P.nuvem.traduzir(e)); })
+        .then(function () { S.usu.ocupado = false; carregarUsuarios(); });
+    },
+    'usu-copiar-link': function () { if (!S.usu.link) return; var dest = S.usu.link.email; U.copiar(S.usu.link.link, function () { avisar('Link copiado. Envie só para ' + dest + '.'); }, function () { var x = document.getElementById('usu-link'); if (x) { x.focus(); x.select(); } avisar('Não consegui copiar sozinho. O link está selecionado: copie com Ctrl+C (ou segure no celular).'); }); },
+    'usu-fechar-link': function () { S.usu.link = null; render(); },
     'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '' }; render(); },
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
     'ir-revisao': function () { S.aba = 'mensagens'; S.soNaoRevisadas = true; render(); },
@@ -1697,10 +1952,16 @@
       var tipo = document.getElementById('ct-' + m.id).value, tema = document.getElementById('cm-' + m.id).value;
       var mudou = tipo !== m.tipo || tema !== m.tema;
       registrar(mudou ? 'Corrigiu classificação' : 'Confirmou classificação', 'Msg ' + m.id + ': ' + nomeTipo(m.tipo) + ' / ' + nomeTema(m.tema) + (mudou ? ' → ' + nomeTipo(tipo) + ' / ' + nomeTema(tema) : ''));
+      var antes = { tipo: m.tipo, tema: m.tema, revisado: m.revisado, aut: m.aut };
       m.tipo = tipo; m.tema = tema; m.revisado = true;
       if (ehProva(m) && !m.aut) m.aut = { status: 'nao_solicitada', confirmadoPor: '', data: null };
-      avisar('Classificação salva como revisada.');
       renderListaMensagens();
+      if (!m.dbId) { avisar('Classificação salva como revisada.'); return; }
+      P.nuvem.revisar(m.dbId, tipo, tema).then(function () { avisar('Classificação salva no servidor.'); }).catch(function (e) {
+        Object.assign(m, antes);
+        renderListaMensagens();
+        avisar('Não salvou: ' + P.nuvem.traduzir(e));
+      });
     },
     'registrar-aut': function (b) {
       if (!pode('editar')) return;
@@ -1712,10 +1973,16 @@
         erro.hidden = false;
         return;
       }
+      var autAntes = alvo.aut;
       alvo.aut = { status: st, confirmadoPor: st === 'uso_interno' || st === 'divulgacao' ? por : '', data: Date.now() };
       registrar('Registrou autorização', (b.dataset.alvo === 'msg' ? 'Msg ' : 'Foto ') + alvo.id + ': ' + AUT[st] + (por ? ' (confirmado por ' + por + ')' : ''));
-      avisar('Autorização registrada.');
       render();
+      if (!alvo.dbId) { avisar('Autorização registrada.'); return; }
+      P.nuvem.autorizar(alvo.dbId, st, alvo.aut.confirmadoPor).then(function () { avisar('Autorização salva no servidor.'); }).catch(function (e) {
+        alvo.aut = autAntes;
+        render();
+        avisar('Não salvou: ' + P.nuvem.traduzir(e));
+      });
     },
     'abrir-editor': function (b) { abrirEditor(b.dataset.id, b.dataset.lado); },
     'fechar-editor': function () { S.editor = null; fecharModal(); },
@@ -1759,7 +2026,7 @@
       var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
       if (!printValido(p)) return;
       // Sem login real, registramos a função simulada. Com login, aqui entra o e-mail de quem aprovou.
-      p.status = 'aprovado'; p.aprovadoPor = PAPEIS[S.papel].nome + ' (login simulado)'; p.aprovadoEm = Date.now(); p.nota = '';
+      p.status = 'aprovado'; p.aprovadoPor = quemSou(); p.aprovadoEm = Date.now(); p.nota = '';
       registrar('Aprovou print', p.id + ' · ' + TIPOS_PRINT[p.tipo]);
       avisar('Print aprovado.');
       render();
@@ -1861,7 +2128,7 @@
       var id = b.dataset.id;
       var t = S.temas.find(function (x) { return x.id === id; });
       S.temas = S.temas.filter(function (x) { return x.id !== id; });
-      ['demo', 'import'].forEach(function (k) { var c = S.dados[k]; if (c) c.mensagens.forEach(function (m) { if (m.tema === id) { m.tema = 'outros'; m.revisado = false; } }); });
+      ['demo', 'import', 'nuvem'].forEach(function (k) { var c = S.dados[k]; if (c) c.mensagens.forEach(function (m) { if (m.tema === id) { m.tema = 'outros'; m.revisado = false; } }); });
       if (S.filtros.tema === id) S.filtros.tema = '';
       registrar('Removeu assunto', t.nome + ' (mensagens foram para "Outros assuntos" e voltaram para revisão)');
       render();
@@ -1932,7 +2199,7 @@
 
   var MUDANCAS = {
     filtro: function (el) { S.filtros[el.dataset.k] = el.value; S.limite = 40; render(); },
-    papel: function (el) { S.papel = el.value; registrar('Trocou função (simulação)', PAPEIS[S.papel].nome); render(); },
+    papel: function (el) { if (S.usuario) return; S.papel = el.value; registrar('Trocou função (simulação)', PAPEIS[S.papel].nome); render(); },
     'so-nao-rev': function (el) { S.soNaoRevisadas = el.checked; S.limite = 40; renderListaMensagens(); },
     'dia-resumo': function (el) { S.diaResumo = el.value; render(); },
     'rel-tipo': function (el) { S.rel.tipo = el.value; render(); },
@@ -2030,6 +2297,19 @@
       render();
     });
   })();
-  if (/^#(visao|dia|dores|resultados|prints|ideias|ajuda|mensagens|relatorios|importar|config)$/.test(location.hash)) S.aba = location.hash.slice(1);
-  render();
+  var abaInicial = location.hash.slice(1);
+  if (ABAS.some(function (a) { return a.id === abaInicial; })) S.aba = abaInicial;
+  if (P.nuvem && P.nuvem.configurado) {
+    // Painel publicado: só mostra algo depois do login. A função vem do servidor.
+    P.nuvem.iniciar(function (eu) {
+      S.usuario = eu; S.papel = eu.funcao; S.modo = 'nuvem'; S.filtros.periodo = '30';
+      registrar('Entrou no painel', eu.email);
+      render();
+      carregarNuvem();
+      if (S.aba === 'usuarios') carregarUsuarios();
+      setInterval(function () {
+        if (document.visibilityState === 'visible' && S.modo === 'nuvem' && (S.aba === 'visao' || S.aba === 'dia') && !S.modalAtivo) carregarNuvem(true);
+      }, 300000);
+    }).catch(function (e) { document.getElementById('entrada').textContent = 'Não consegui iniciar o login: ' + P.nuvem.traduzir(e); });
+  } else render();
 })(window.Painel);

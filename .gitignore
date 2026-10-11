@@ -11,3 +11,5 @@ WhatsApp Chat with *.txt
 # Sistema
 .DS_Store
 Thumbs.db
+assets/js/config.js
+dist/

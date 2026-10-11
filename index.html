@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="assets/css/painel.css">
 </head>
 <body>
+<div id="entrada" class="entrada" hidden></div>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
 <header class="topo">
   <button type="button" class="menu-btn" id="menu-btn" data-acao="menu" aria-expanded="false" aria-controls="nav"><span aria-hidden="true">☰</span> <span class="menu-atual">Menu</span></button>
@@ -21,10 +22,12 @@
   <div class="topo-controles">
     <button type="button" class="btn btn-sec btn-peq" data-acao="atualizar" title="Mostra até quando vão os dados, recalcula as análises e leva para importar o arquivo mais novo">Atualizar dados</button>
     <div class="seg" role="group" aria-label="Fonte dos dados">
-      <button type="button" data-acao="modo" data-v="demo" aria-pressed="true">Exemplo fictício</button>
+      <button type="button" data-acao="modo" data-v="nuvem" aria-pressed="false" hidden>Ao vivo</button>
       <button type="button" data-acao="modo" data-v="import" aria-pressed="false">Importados</button>
+      <button type="button" data-acao="modo" data-v="demo" aria-pressed="true">Exemplo fictício</button>
     </div>
-    <label class="papel"><span>Ver como</span>
+    <div class="conta" id="conta" hidden><span class="conta-nome"></span> <button type="button" class="btn btn-sec btn-peq" data-acao="sair">Sair</button></div>
+    <label class="papel" id="papel-rotulo"><span>Ver como</span>
       <select id="papel" data-mudar="papel">
         <option value="leitura">Leitura</option>
         <option value="edicao">Edição</option>
@@ -47,6 +50,10 @@
 <noscript><p class="faixa">Este painel precisa de JavaScript ativado no navegador.</p></noscript>
 <!-- JSZip 3.10.1 (licença MIT): gera o .zip do pacote de prints, inclusive sem internet. -->
 <script src="assets/vendor/jszip-3.10.1.min.js"></script>
+<!-- Supabase JS 2.45.4 (licença MIT): login e leitura dos dados no painel publicado. -->
+<script src="assets/vendor/supabase-js-2.45.4.min.js"></script>
+<!-- config.js só existe no painel publicado (endereço do servidor e chave pública). Sem ele, o painel abre como protótipo. -->
+<script src="assets/js/config.js"></script>
 <script src="assets/js/util.js"></script>
 <script src="assets/js/classificador.js"></script>
 <script src="assets/js/privacidade.js"></script>
@@ -56,6 +63,7 @@
 <script src="assets/js/grafico.js"></script>
 <script src="assets/js/pauta.js"></script>
 <script src="assets/js/analise.js"></script>
+<script src="assets/js/nuvem.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
