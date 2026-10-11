@@ -64,7 +64,7 @@
     dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] }, nuvem: { alunas: {}, mensagens: [], midias: [], prints: [] } },
     usuario: null,
     nuvem: { carregando: false, erro: '', buscadoEm: 0, grupos: [] },
-    usu: { lista: null, carregando: false, erro: '', link: null, editando: '', ocupado: false },
+    usu: { lista: null, carregando: false, erro: '', link: null, acesso: null, editando: '', ocupado: false },
     registroServidor: null,
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
@@ -1738,10 +1738,38 @@
     return h;
   }
 
+  /* ---------- Minha conta ---------- */
+
+  function renderMinhaConta() {
+    var u = S.usuario;
+    if (!u) return;
+    var paineis = u.funcao === 'admin' ? 'Todos' : ABAS.filter(function (a) { return (u.paineis || []).indexOf(a.id) !== -1; }).map(function (a) { return a.nome; }).join(', ');
+    abrirModal('<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="mc-tit">' +
+      '<div class="card-topo"><h2 id="mc-tit">Minha conta</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
+      '<dl class="status-lista"><div><dt>Nome</dt><dd>' + esc(u.nome || '-') + '</dd></div><div><dt>E-mail</dt><dd>' + esc(u.email) + '</dd></div>' +
+      '<div><dt>Função</dt><dd>' + esc(PAPEIS[u.funcao].nome) + '</dd></div><div><dt>Painéis</dt><dd>' + esc(paineis) + '</dd></div></dl>' +
+      '<h3>Trocar senha</h3><p class="sub">Use pelo menos 8 caracteres. Não use a mesma senha de outros sites.</p>' +
+      '<label class="campo"><span>Nova senha</span><input type="password" id="mc-1" autocomplete="new-password" minlength="8"></label>' +
+      '<label class="campo"><span>Repita a nova senha</span><input type="password" id="mc-2" autocomplete="new-password" minlength="8"></label>' +
+      '<p class="erro" id="mc-erro" hidden></p>' +
+      '<div class="linha-controles"><button type="button" class="btn" data-acao="mc-salvar">Salvar nova senha</button></div>' +
+      '<p class="nota-peq">Para mudar nome, função ou painéis, fale com a Administração.</p></div>');
+    S.modalAtivo = 'conta';
+  }
+
   /* ---------- Usuários ---------- */
 
   var PAINEIS_USU = ABAS.filter(function (a) { return a.id !== 'config' && a.id !== 'usuarios'; });
-  var SITUACAO = { sem_convite: 'Ainda não convidada', convite_enviado: 'Convite enviado, senha ainda não criada', ativa: 'Acesso ativo', desativada: 'Desativada' };
+  var SITUACAO = { sem_convite: 'Acesso ainda não criado', convite_enviado: 'Convite enviado, senha ainda não criada', senha_inicial: 'Com a senha inicial (troca no primeiro acesso)', ativa: 'Acesso ativo', desativada: 'Desativada' };
+
+  function mensagemAcesso(a) {
+    return 'Seu acesso ao painel de acompanhamento Corpo Feliz:\n' + location.origin + location.pathname + '\nE-mail: ' + a.email + '\nSenha inicial: ' + a.senha +
+      '\nNo primeiro acesso o painel pede para você criar uma senha só sua.';
+  }
+  function mostrarAcesso(email, r) {
+    if (r && r.ok && r.senha) S.usu.acesso = { email: email, senha: r.senha };
+    else avisar('Não deu certo: ' + ((r && r.erro) || 'motivo desconhecido'));
+  }
 
   function paineisMarcados(prefixo) {
     return PAINEIS_USU.filter(function (a) { var x = document.getElementById(prefixo + a.id); return x && x.checked; }).map(function (a) { return a.id; });
@@ -1777,19 +1805,26 @@
 
   function salvarUsuario(dados, ok) {
     if (S.usu.ocupado) return;
-    S.usu.ocupado = true; S.usu.link = null; render();
+    S.usu.ocupado = true; S.usu.link = null; S.usu.acesso = null; render();
     P.nuvem.usuarios(Object.assign({ acao: 'salvar' }, dados)).then(function (r) {
       S.usu.editando = '';
       avisar(ok);
       if (r.convite) mostrarConvite(dados.email, r.convite);
+      if (r.acesso) mostrarAcesso(dados.email, r.acesso);
     }).catch(function (e) { avisar(e.message || P.nuvem.traduzir(e)); })
       .then(function () { S.usu.ocupado = false; carregarUsuarios(); });
   }
 
   function abaUsuarios() {
-    var h = '<div class="cabeca-aba"><h1>Usuários</h1><p class="sub">Quem entra no painel, com qual função e quais painéis vê. A senha é criada pela própria pessoa, pelo link que chega no e-mail. Ninguém da equipe vê ou digita a senha de outra pessoa.</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Usuários</h1><p class="sub">Quem entra no painel, com qual função e quais painéis vê. Cada pessoa entra com a senha inicial (primeiro nome + 1234) e, no primeiro acesso, cria uma senha só dela. Depois disso, ninguém da equipe sabe a senha de outra pessoa.</p></div>';
     if (!S.usuario) return h + vazio('Disponível no painel online', 'Neste protótipo sem login, use "Ver como" no topo para simular as funções. No painel publicado, a Administração cadastra as pessoas aqui.');
     var U2 = S.usu, dis = U2.ocupado ? ' disabled' : '';
+    if (U2.acesso) {
+      h += '<section class="painel-card card-destaque" role="alert"><h2>Acesso pronto</h2><p>Passe para <strong>' + esc(U2.acesso.email) + '</strong> (por exemplo, pelo WhatsApp):</p>' +
+        '<label class="campo campo-largo"><span>Mensagem</span><textarea id="usu-msg" rows="5" readonly>' + esc(mensagemAcesso(U2.acesso)) + '</textarea></label>' +
+        '<div class="linha-controles"><button type="button" class="btn" data-acao="usu-copiar-msg">Copiar mensagem</button><button type="button" class="btn btn-sec" data-acao="usu-fechar-acesso">Já enviei, fechar</button></div>' +
+        '<p class="nota-peq">Envie só para a própria pessoa. Assim que ela entrar, o painel pede uma senha nova e a senha inicial deixa de funcionar.</p></section>';
+    }
     if (U2.link) {
       h += '<section class="painel-card card-destaque" role="alert"><h2>O e-mail de convite não saiu</h2><p>Envie este link você mesma para <strong>' + esc(U2.link.email) + '</strong> (por exemplo, pelo WhatsApp). Ele abre a tela de criar senha, funciona uma vez só e expira em pouco tempo. Não envie para outra pessoa.</p>' +
         (U2.link.motivo ? '<p class="nota-peq">Motivo informado pelo servidor: ' + esc(U2.link.motivo) + '</p>' : '') +
@@ -1798,10 +1833,10 @@
     }
     h += '<section class="painel-card"><h2>Adicionar pessoa</h2><div class="form-usuario">' +
       '<label class="campo"><span>E-mail</span><input type="email" id="un-email" autocomplete="off" placeholder="nome@exemplo.com"></label>' +
-      '<label class="campo"><span>Nome (opcional)</span><input type="text" id="un-nome" maxlength="60" placeholder="Como aparece no painel"></label>' +
+      '<label class="campo"><span>Nome</span><input type="text" id="un-nome" maxlength="60" placeholder="Ex.: Laura"></label>' +
       escolhaFuncao('un-funcao', 'leitura') + '</div>' +
       escolhaPaineis('un-p-', PAINEIS_USU.map(function (a) { return a.id; })) +
-      '<label class="check"><input type="checkbox" id="un-convidar" checked> Enviar o convite por e-mail agora</label>' +
+      '<p class="nota-peq">A senha inicial é o primeiro nome + 1234 (ex.: laura1234). No primeiro acesso, o painel obriga a pessoa a criar uma senha só dela.</p>' +
       '<p class="erro" id="un-erro" hidden></p>' +
       '<div class="linha-controles"><button type="button" class="btn" data-acao="usu-adicionar"' + dis + '>Adicionar</button></div></section>';
 
@@ -1824,8 +1859,7 @@
         } else {
           li += '<div class="linha-controles">' +
             '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-editar" data-email="' + esc(u.email) + '">Editar função e painéis</button>' +
-            (u.ativo && u.situacao !== 'ativa' ? '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-convidar" data-email="' + esc(u.email) + '"' + dis + '>' + (u.situacao === 'sem_convite' ? 'Enviar convite' : 'Reenviar convite') + '</button>' : '') +
-            (u.ativo && u.situacao === 'ativa' && !u.eu ? '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-convidar" data-email="' + esc(u.email) + '"' + dis + '>Enviar link de nova senha</button>' : '') +
+            (u.ativo && !u.eu ? '<button type="button" class="btn btn-sec btn-peq" data-acao="usu-senha-padrao" data-email="' + esc(u.email) + '"' + dis + '>' + (u.situacao === 'sem_convite' ? 'Criar acesso' : 'Voltar para a senha inicial') + '</button>' : '') +
             (u.eu ? '' : '<button type="button" class="btn btn-sec btn-peq' + (u.ativo ? ' btn-perigo' : '') + '" data-acao="usu-ativo" data-email="' + esc(u.email) + '"' + dis + '>' + (u.ativo ? 'Desativar acesso' : 'Reativar acesso') + '</button>') +
             '</div>';
         }
@@ -1928,7 +1962,9 @@
       if ((S.usu.lista || []).some(function (x) { return x.email === email; })) { erro.textContent = 'Este e-mail já está na lista.'; erro.hidden = false; return; }
       var paineis = paineisMarcados('un-p-');
       if (!paineis.length) { erro.textContent = 'Escolha pelo menos um painel.'; erro.hidden = false; return; }
-      salvarUsuario({ email: email, nome: document.getElementById('un-nome').value, funcao: document.getElementById('un-funcao').value, paineis: paineis, ativo: true, convidar: document.getElementById('un-convidar').checked }, 'Pessoa adicionada.');
+      var nome = document.getElementById('un-nome').value.trim();
+      if (!/[a-zA-ZÀ-ÿ]{2}/.test(nome)) { erro.textContent = 'Preencha o nome: a senha inicial usa o primeiro nome.'; erro.hidden = false; return; }
+      salvarUsuario({ email: email, nome: nome, funcao: document.getElementById('un-funcao').value, paineis: paineis, ativo: true, criar_acesso: true }, 'Pessoa adicionada.');
     },
     'usu-convidar': function (b) {
       if (S.usu.ocupado) return;
@@ -1939,6 +1975,32 @@
     },
     'usu-copiar-link': function () { if (!S.usu.link) return; var dest = S.usu.link.email; U.copiar(S.usu.link.link, function () { avisar('Link copiado. Envie só para ' + dest + '.'); }, function () { var x = document.getElementById('usu-link'); if (x) { x.focus(); x.select(); } avisar('Não consegui copiar sozinho. O link está selecionado: copie com Ctrl+C (ou segure no celular).'); }); },
     'usu-fechar-link': function () { S.usu.link = null; render(); },
+    'usu-fechar-acesso': function () { S.usu.acesso = null; render(); },
+    'usu-copiar-msg': function () {
+      if (!S.usu.acesso) return;
+      var dest = S.usu.acesso.email;
+      U.copiar(mensagemAcesso(S.usu.acesso), function () { avisar('Mensagem copiada. Envie só para ' + dest + '.'); },
+        function () { var x = document.getElementById('usu-msg'); if (x) { x.focus(); x.select(); } avisar('Não consegui copiar sozinho. A mensagem está selecionada: copie com Ctrl+C (ou segure no celular).'); });
+    },
+    'usu-senha-padrao': function (b) {
+      if (S.usu.ocupado) return;
+      S.usu.ocupado = true; S.usu.link = null; S.usu.acesso = null; render();
+      P.nuvem.usuarios({ acao: 'senha_padrao', email: b.dataset.email }).then(function (r) { mostrarAcesso(b.dataset.email, r); })
+        .catch(function (e) { avisar(e.message || P.nuvem.traduzir(e)); })
+        .then(function () { S.usu.ocupado = false; carregarUsuarios(); });
+    },
+    'minha-conta': function () { renderMinhaConta(); var x = document.getElementById('mc-1'); if (x) x.focus(); },
+    'mc-salvar': function () {
+      var s1 = document.getElementById('mc-1').value, s2 = document.getElementById('mc-2').value, erro = document.getElementById('mc-erro');
+      function falha(t) { erro.textContent = t; erro.hidden = false; }
+      if (s1.length < 8) return falha('A senha precisa ter pelo menos 8 caracteres.');
+      if (s1 !== s2) return falha('As duas senhas não são iguais.');
+      var bt = document.querySelector('[data-acao="mc-salvar"]'); bt.disabled = true;
+      P.nuvem.trocarSenha(s1).then(function (msg) {
+        if (msg) { bt.disabled = false; return falha(msg); }
+        fecharModal(); avisar('Senha trocada. Use a nova senha no próximo acesso.');
+      });
+    },
     'limpar-filtros': function () { S.filtros = { periodo: S.filtros.periodo, inicio: S.filtros.inicio, fim: S.filtros.fim, canal: '', tema: '', tipo: '', autorizacao: '' }; render(); },
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
     'ir-revisao': function () { S.aba = 'mensagens'; S.soNaoRevisadas = true; render(); },

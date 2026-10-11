@@ -28,13 +28,15 @@
     return 'Não deu certo: ' + msg;
   }
 
-  // Lê o que veio no endereço pelo link do e-mail (#access_token=...&type=invite) antes da biblioteca limpar.
+  // Lê o que veio no endereço pelo link do e-mail antes da biblioteca limpar. Dois formatos:
+  // #token_hash=...&type=invite (link direto para o painel, não depende da lista de endereços do Supabase)
+  // #access_token=...&type=invite (link padrão do Supabase, depois de passar pelo /verify)
   function lerLink() {
     var h = location.hash.replace(/^#/, '');
-    if (!/access_token=|error_description=|error=/.test(h)) return { tipo: null, erro: null };
+    if (!/token_hash=|access_token=|error_description=|error=/.test(h)) return { tipo: null, erro: null, hash: null };
     var q = {};
     h.split('&').forEach(function (p) { var kv = p.split('='); q[decodeURIComponent(kv[0])] = decodeURIComponent((kv[1] || '').replace(/\+/g, ' ')); });
-    return { tipo: q.type || null, erro: q.error_description || q.error || null };
+    return { tipo: q.type || null, erro: q.error_description || q.error || null, hash: q.token_hash || null };
   }
 
   function criar() {
@@ -65,7 +67,7 @@
 
   /* ---------- tela de entrada ---------- */
 
-  var E = { modo: 'entrar', msg: '', erro: '', ocupado: false, aoEntrar: null, email: '' };
+  var E = { modo: 'entrar', msg: '', erro: '', ocupado: false, aoEntrar: null, email: '', primeiro: false };
 
   function caixa(conteudo) {
     return '<div class="entrada-caixa"><p class="entrada-marca">Corpo Feliz</p><h1>Acompanhamento das Alunas</h1>' + conteudo + '</div>';
@@ -83,8 +85,8 @@
         '<label class="campo"><span>E-mail</span><input type="email" id="en-email" autocomplete="username" required value="' + esc(E.email) + '"></label>' +
         '<label class="campo"><span>Senha</span><input type="password" id="en-senha" autocomplete="current-password" required></label>' +
         '<button type="submit" class="btn"' + dis + '>' + (E.ocupado ? 'Entrando…' : 'Entrar') + '</button></form>' +
-        '<p class="entrada-links"><button type="button" class="link" data-entrada="esqueci">Esqueci minha senha</button></p>' +
-        '<p class="nota-peq">Primeiro acesso? Use o link do convite que chegou no seu e-mail para criar a senha.</p>');
+        '<p class="nota-peq">Primeiro acesso? Entre com a senha inicial que a Administração te passou. Em seguida você cria a sua senha.</p>' +
+        '<p class="nota-peq">Esqueceu a senha? Peça para a Administração voltar a sua senha para a inicial.</p>');
     } else if (E.modo === 'esqueci') {
       h = caixa('<form id="form-esqueci" novalidate>' + aviso +
         '<p class="sub">Informe seu e-mail. Se ele tiver acesso ao painel, chega um link para criar uma nova senha.</p>' +
@@ -93,7 +95,7 @@
         '<p class="entrada-links"><button type="button" class="link" data-entrada="entrar">Voltar para entrar</button></p>');
     } else if (E.modo === 'senha') {
       h = caixa('<form id="form-senha" novalidate>' + aviso +
-        '<h2>Crie sua senha</h2><p class="sub">Use pelo menos 8 caracteres. Não use a mesma senha de outros sites.</p>' +
+        '<h2>Crie sua senha</h2><p class="sub">' + (E.primeiro ? 'Primeiro acesso: troque a senha inicial por uma só sua antes de ver o painel. ' : '') + 'Use pelo menos 8 caracteres. Não use a mesma senha de outros sites.</p>' +
         '<label class="campo"><span>Nova senha</span><input type="password" id="se-1" autocomplete="new-password" minlength="8" required></label>' +
         '<label class="campo"><span>Repita a senha</span><input type="password" id="se-2" autocomplete="new-password" minlength="8" required></label>' +
         '<button type="submit" class="btn"' + dis + '>Salvar senha e entrar</button></form>');
@@ -116,6 +118,7 @@
     try {
       var eu = await rpc('painel_eu');
       if (!eu) { E.modo = 'sem-acesso'; E.erro = ''; renderEntrada(); return; }
+      if (eu.trocar_senha) { E.primeiro = true; E.modo = 'senha'; E.erro = ''; renderEntrada(); return; }
       mostrarEntrada(false);
       E.aoEntrar(eu);
     } catch (e) {
@@ -153,9 +156,10 @@
         if (s1.length < 8) { E.erro = 'A senha precisa ter pelo menos 8 caracteres.'; renderEntrada(); return; }
         if (s1 !== s2) { E.erro = 'As duas senhas não são iguais.'; renderEntrada(); return; }
         E.ocupado = true; renderEntrada();
-        var r3 = await sb.auth.updateUser({ password: s1 });
+        var erroTroca = await trocarSenha(s1);
         E.ocupado = false;
-        if (r3.error) { E.erro = traduzir(r3.error); renderEntrada(); return; }
+        if (erroTroca) { E.erro = erroTroca; renderEntrada(); return; }
+        E.primeiro = false;
         await concluirEntrada();
       }
     } catch (e) {
@@ -171,6 +175,17 @@
     E.modo = v; E.erro = ''; E.msg = ''; renderEntrada();
   });
 
+  // Troca a senha e avisa o servidor (que confere que não é mais a senha inicial). Devolve o erro em texto, ou ''.
+  async function trocarSenha(nova) {
+    var r = await sb.auth.updateUser({ password: nova });
+    if (r.error) return traduzir(r.error);
+    try {
+      var ok = await rpc('painel_senha_trocada');
+      if (!ok) return 'A nova senha precisa ser diferente da senha inicial.';
+    } catch (e) { return traduzir(e); }
+    return '';
+  }
+
   async function iniciar(aoEntrar) {
     E.aoEntrar = aoEntrar;
     var link = lerLink();
@@ -178,7 +193,13 @@
     E.modo = 'carregando'; renderEntrada();
     criar();
     var s = await sb.auth.getSession();
-    if (link.tipo || link.erro) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* segue */ } }
+    if (link.tipo || link.erro || link.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* segue */ } }
+    if (link.hash) {
+      var tipo = ['invite', 'recovery', 'signup', 'magiclink', 'email'].indexOf(link.tipo) !== -1 ? link.tipo : 'invite';
+      var v = await sb.auth.verifyOtp({ token_hash: link.hash, type: tipo });
+      if (v.error) { E.modo = 'entrar'; E.erro = traduzir({ message: 'expired ' + v.error.message }); renderEntrada(); return; }
+      E.modo = 'senha'; renderEntrada(); return;
+    }
     if (link.erro && !(s.data && s.data.session)) {
       E.modo = 'entrar'; E.erro = traduzir({ message: 'expired ' + link.erro }); renderEntrada(); return;
     }
@@ -199,6 +220,7 @@
     iniciar: iniciar,
     sair: sair,
     traduzir: traduzir,
+    trocarSenha: trocarSenha,
     mensagens: function (dias) { return rpc('painel_mensagens_ler', { p_dias: dias || 60 }); },
     revisar: function (id, tipo, tema) { return rpc('painel_revisar', { p_id: id, p_tipo: tipo, p_tema: tema }); },
     autorizar: function (id, status, por) { return rpc('painel_autorizar', { p_id: id, p_status: status, p_por: por || '' }); },
