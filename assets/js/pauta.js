@@ -76,6 +76,8 @@ window.Painel = window.Painel || {};
     var objs = A.analisarObjecoes({ lista: ctx.lista, anterior: ctx.anterior, objecoes: ctx.objecoes, temas: temas, textoSeguro: ctx.textoSeguro, pronto: ctx.pronto });
     var res = A.analisarResultados({ lista: ctx.lista, resultados: ctx.resultados, pronto: ctx.pronto });
     var inter = A.interacao(ctx.todas, ctx.iv);
+    // Mensagens da equipe podem citar o nome de uma aluna ("Bom dia, Fulana"): mascara antes de mostrar ou exportar.
+    inter.posts.forEach(function (x) { x.texto = ctx.textoEquipe({ texto: x.texto }); });
     var sugestoes = A.sugestoesAjuda({ lista: ctx.lista, anterior: ctx.anterior, temas: temas, objecoesAn: objs, grupos: grupos, sinais: ctx.sinais, interacao: inter });
     var h = [], t = [], csv = [];
     function secao(titulo, nota) { h.push('<h3>' + esc(titulo) + '</h3>' + (nota ? '<p class="rel-meta">' + esc(nota) + '</p>' : '')); t.push(titulo.toUpperCase()); }
@@ -194,7 +196,7 @@ window.Painel = window.Painel || {};
       t.push('- (' + g.itens.length + 'x) "' + g.principal + '" [' + tema(g.tema).nome + ']' + (rr ? ' | Sua resposta: "' + ctx.textoEquipe(rr) + '"' : ''));
       return '<li>' + citar(g.principal) + ' <span>(' + g.itens.length + 'x · ' + esc(tema(g.tema).nome) + ')</span>' +
         (g.variacoes.length ? '<br><span>Também escrevem: ' + g.variacoes.map(citar).join(' · ') + '</span>' : '') +
-        (rr ? '<br><span class="resp-rel">Sua resposta: ' + citar(ctx.textoEquipe(rr)) + '</span>' : '<br><span>Sem resposta registrada nos arquivos.</span>') + '</li>';
+        (rr ? '<br><span class="resp-rel">Sua resposta: ' + citar(ctx.textoEquipe(rr)) + '</span>' : '<br><span>Sem resposta registrada da equipe.</span>') + '</li>';
     }).join('') + '</ol>');
     fimSecao();
 

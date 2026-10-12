@@ -70,7 +70,7 @@ function lerEvento(b: any): any | null {
       nome: meta.contacts?.[0]?.profile?.name,
       texto: m.text?.body ?? m[tipo]?.caption ?? null,
       tipoMidia: tipo && tipo !== "text" ? tipo : null,
-      quando: Number(m.timestamp) * 1000, responde: m.context?.id ?? null,
+      quando: (Number(m.timestamp) * 1000) || Date.now(), responde: m.context?.id ?? null,
     };
   }
   // Escolhe o objeto que tem a identificação da conversa (uazapi: b.message; Evolution/Baileys: b.data).
@@ -92,6 +92,7 @@ function lerEvento(b: any): any | null {
   const t = tipoBruto.toLowerCase();
   const tipoMidia = /image/.test(t) ? "foto" : /video/.test(t) ? "video" : /audio|ptt/.test(t) ? "audio" : /sticker/.test(t) ? "figurinha" : /document/.test(t) ? "documento" : null;
   let quando = Number(primeiro(m.messageTimestamp, m.timestamp, m.t, Date.now()));
+  if (!Number.isFinite(quando) || quando <= 0) quando = Date.now();
   if (quando < 1e12) quando *= 1000; // segundos -> milissegundos
   const ctx = conteudo?.extendedTextMessage?.contextInfo ?? conteudo?.contextInfo ?? m.contextInfo ?? {};
   return {
@@ -173,7 +174,7 @@ Deno.serve(async (req) => {
     if (req.method === "GET") return json({ ok: true, servico: "painel-whatsapp" });
     if (req.method !== "POST") return json({ ok: false }, 405);
     const { wa_webhook_secret } = await cfg();
-    const chave = req.headers.get("x-painel-chave") ?? new URL(req.url).searchParams.get("chave");
+    const chave = req.headers.get("x-painel-chave");
     if (!wa_webhook_secret || chave !== wa_webhook_secret) return json({ ok: false }, 401);
 
     const corpo = await req.json().catch(() => null);

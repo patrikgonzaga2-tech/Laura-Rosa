@@ -20,7 +20,7 @@
     [/rate limit|too many|security purposes/i, 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.'],
     [/should be different/i, 'A nova senha precisa ser diferente da anterior.'],
     [/password should be at least|weak password/i, 'Senha fraca. Use pelo menos 8 caracteres, misturando letras e números.'],
-    [/expired|invalid.*(link|token)|otp/i, 'Este link expirou ou já foi usado. Peça um novo para a administração ou use "Esqueci minha senha".'],
+    [/expired|invalid.*(link|token)|otp/i, 'Este link expirou ou já foi usado. Peça para a Administração voltar a sua senha para a inicial.'],
     [/failed to fetch|network/i, 'Sem conexão com o servidor. Confira a internet e tente de novo.'],
     [/sem acesso|permission|42501/i, 'Seu usuário não tem acesso a isso.']
   ];
@@ -174,7 +174,7 @@
         E.ocupado = true; renderEntrada();
         var r = await sb.auth.signInWithPassword({ email: E.email, password: senha });
         E.ocupado = false;
-        if (r.error) { E.erro = traduzir(r.error); renderEntrada(); return; }
+        if (r.error) { esquecerAparelho(); E.erro = traduzir(r.error); renderEntrada(); return; }
         await concluirEntrada();
       } else if (f.id === 'form-esqueci') {
         E.email = document.getElementById('es-email').value.trim();

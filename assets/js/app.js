@@ -205,7 +205,7 @@
     autorizados: { nome: 'Relatos autorizados para divulgação', un: 'mensagens', sentido: 'bom', conta: prontoDivulgacao, desc: 'Depoimentos e relatos revisados, com autorização e quem confirmou.' },
     alunas: { nome: 'Alunas que escreveram', un: 'alunas', sentido: 'neutro', desc: 'Pessoas diferentes que mandaram mensagem no período.',
       calc: function (l) { var s = {}; l.forEach(function (m) { if (m.alunaId) s[m.alunaId] = 1; }); return Object.keys(s).length; } },
-    taxaResposta: { nome: 'Perguntas com resposta registrada', un: '%', sentido: 'bom', desc: 'Parte das dúvidas, dificuldades e queixas que têm resposta da equipe nos arquivos.',
+    taxaResposta: { nome: 'Perguntas com resposta registrada', un: '%', sentido: 'bom', desc: 'Parte das dúvidas, dificuldades e queixas que têm resposta registrada da equipe.',
       calc: function (l) { var d = l.filter(ehDor); return d.length ? Math.round(100 * d.filter(function (m) { return m.resposta; }).length / d.length) : null; } },
     tempoResposta: { nome: 'Tempo mediano até a resposta', un: 'min', sentido: 'ruim', desc: 'Metade das perguntas foi respondida em até esse tempo (só as que têm resposta registrada).',
       calc: function (l) {
@@ -287,7 +287,7 @@
     var objSub = r.objecoes.filter(function (o) { return o.n >= 5 && o.antes > 0 && (o.n - o.antes) / o.antes >= 0.3; });
     if (objSub.length) out.push({ nivel: 'atencao', texto: 'A objeção <strong>"' + esc(objSub[0].obj.nome) + '"</strong> subiu: ' + objSub[0].n + ' menções (antes: ' + objSub[0].antes + ').', rotulo: 'Ver objeções', destino: 'dores' });
     var semResp = atual.filter(function (m) { return ehDor(m) && !m.resposta; }).length;
-    if (semResp) out.push({ nivel: 'atencao', texto: '<strong>' + semResp + '</strong> pergunta(s) do período sem resposta registrada nos arquivos.', rotulo: 'Ver conversas', destino: 'dia-sem-resposta' });
+    if (semResp) out.push({ nivel: 'atencao', texto: '<strong>' + semResp + '</strong> pergunta(s) do período sem resposta registrada da equipe.', rotulo: 'Ver conversas', destino: 'dia-sem-resposta' });
     var sinais = A.sinaisAlunas(msgsAlunas(), S.temas, refFim()).filter(function (s) { return s.tipo === 'dificuldade'; }).length;
     if (sinais) out.push({ nivel: 'atencao', texto: '<strong>' + sinais + '</strong> aluna(s) com dificuldade repetida na última semana.', rotulo: 'Ver quem', destino: 'ajuda' });
     var ag = (conj().prints || []).filter(function (p) { return p.status === 'aguardando'; }).length;
@@ -460,7 +460,7 @@
     if (semDados) {
       el.innerHTML = S.nuvem.carregando ? vazio('Buscando mensagens…', 'Um instante.') : S.nuvem.erro ?
         vazio('Não consegui buscar as mensagens', esc(S.nuvem.erro), '<button type="button" class="btn" data-acao="nuvem-recarregar">Tentar de novo</button>') :
-        vazio('Ainda não chegaram mensagens', 'O bot já está no grupo. Assim que as alunas escreverem no grupo do Telegram, as mensagens aparecem aqui. Use "Atualizar dados" para buscar as novas.',
+        vazio('Ainda não chegaram mensagens', 'Assim que as alunas escreverem no grupo do Telegram ou no WhatsApp de suporte, as mensagens aparecem aqui. Use "Atualizar dados" para buscar as novas.',
           '<button type="button" class="btn" data-acao="nuvem-recarregar">Buscar agora</button>');
       return;
     }
@@ -678,7 +678,7 @@
       var min = Math.round((r.data - m.data) / 60000);
       h += '<div class="resposta"><span class="resp-rot">Resposta de ' + esc(r.autor || 'equipe') + ' · ' + U.fmtHora(r.data) + ' (' + (min < 60 ? min + ' min' : Math.round(min / 60) + ' h') + ' depois)' + (m.respostaEstimada ? ' · ligação estimada' : '') + '</span>' +
         '<p>' + esc(PRIV.mascararTexto(r.texto, alunasAtuais())) + '</p></div>';
-    } else h += '<p class="sem-resp">Sem resposta registrada nos arquivos.</p>';
+    } else h += '<p class="sem-resp">Sem resposta registrada da equipe.</p>';
     return h + '</article>';
   }
 
@@ -864,7 +864,7 @@
 
   function abaMensagens() {
     var h = '<div class="cabeca-aba"><h1>Mensagens e revisão</h1><p class="sub">Busque por palavra ou assunto e corrija a classificação automática. Só depois de revisadas as mensagens entram nos relatórios (essa opção pode ser desligada em Relatórios). Os textos aparecem sem telefone, e-mail ou sobrenome.</p></div>';
-    h += '<div class="linha-controles"><label class="campo campo-largo"><span>Buscar</span><input type="search" id="busca" placeholder="Ex.: televisão, marmita, glúteo, A-012" value="' + esc(S.busca) + '" autocomplete="off"></label>' +
+    h += '<div class="linha-controles"><label class="campo campo-largo"><span>Buscar</span><input type="search" id="busca" placeholder="Ex.: televisão, marmita, glúteo, código da aluna" value="' + esc(S.busca) + '" autocomplete="off"></label>' +
       '<label class="check"><input type="checkbox" id="so-nao-rev" data-mudar="so-nao-rev"' + (S.soNaoRevisadas ? ' checked' : '') + '> Só não revisadas</label>' +
       '<label class="check"><input type="checkbox" id="so-sem-resp" data-mudar="so-sem-resp"' + (S.soSemResposta ? ' checked' : '') + '> Só perguntas sem resposta registrada</label></div>';
     if (!pode('editar')) h += semPermissao('corrigir classificações');
@@ -1105,7 +1105,7 @@
       '<label class="campo"><span>Perfil (opcional)</span><input type="text" id="cp-assin" data-mudar="cp" data-k="assinatura" value="' + esc(K.assinatura) + '" placeholder="@seuperfil"></label>' +
       '<label class="campo"><span>Fundo</span><select id="cp-fundo" data-mudar="cp" data-k="fundo">' + opcoes(fundos, K.fundo) + '</select></label>' +
       '<button type="button" class="btn" data-acao="cp-enviar">Enviar para aprovação</button>' +
-      '<p class="nota-peq">Os formatos são uma sugestão inicial. Me diga os tamanhos que a social media usa e eu ajusto.</p>' +
+      '<p class="nota-peq">Feed 1080×1350, stories 1080×1920 e quadrado 1080×1080.</p>' +
       '</div><div class="cp-previa"><p class="rot-canvas">Prévia</p><img src="' + K.previa + '" alt="Prévia do print"></div></div></div>');
   }
 
@@ -1469,7 +1469,7 @@
         ? '<button type="button" class="btn" data-acao="rel-html">Baixar relatório (.html)</button><button type="button" class="btn btn-sec" data-acao="rel-csv">Baixar planilha (.csv)</button><button type="button" class="btn btn-sec" data-acao="rel-copiar">Copiar texto</button>'
         : '') + '</div>';
     if (!pode('exportar')) h += semPermissao('exportar relatórios');
-    h += '<p class="nota-peq">Para salvar em PDF, abra o .html baixado e use Imprimir → Salvar como PDF. Se o download não funcionar nesta visualização, use "Copiar texto" ou abra o painel direto pelo arquivo index.html.</p>';
+    h += '<p class="nota-peq">Para salvar em PDF, abra o .html baixado e use Imprimir → Salvar como PDF. Se o download não funcionar, use "Copiar texto".</p>';
     h += '<section class="painel-card relatorio" aria-label="Prévia do relatório">' + r.html + '</section>';
     return h;
   }
@@ -1514,8 +1514,9 @@
       var eq = !!x.equipe, alunaId = null;
       if (x.grupo) grupos[x.grupo] = 1;
       if (!eq) {
+        // Código curto e estável por aluna: W- (WhatsApp) ou T- (Telegram) + 8 caracteres do pseudônimo.
         var ref = x.autor || 'sem-autor';
-        alunaId = 'T-' + ref.replace(/^tg_/, '').slice(0, 5).toUpperCase();
+        alunaId = (x.origem === 'whatsapp' ? 'W-' : 'T-') + ref.replace(/^(tg|wa)_/, '').slice(0, 8).toUpperCase();
         if (!alunas[alunaId]) alunas[alunaId] = { id: alunaId, chave: ref, nome: x.nome || 'Aluna', sobrenome: '' };
         else if (x.nome) alunas[alunaId].nome = x.nome;
       }
@@ -1938,7 +1939,7 @@
       var c = conj();
       var fonte = K.fonte === 'msg' ? acharMsg(K.id) : acharFoto(K.id);
       var tipo = K.fonte === 'msg' ? 'depoimento' : fonte.tipo;
-      c.prints.push({ id: 'p' + (c.prints.length + 1) + '', fonte: K.fonte, fonteId: K.id, alunaId: fonte.alunaId, tipo: tipo, formato: K.formato, url: K.previa, status: 'aguardando', criadoEm: Date.now(), nota: '' });
+      c.prints.push({ id: 'p' + Date.now().toString(36), fonte: K.fonte, fonteId: K.id, alunaId: fonte.alunaId, tipo: tipo, formato: K.formato, url: K.previa, status: 'aguardando', criadoEm: Date.now(), nota: '' });
       S.assinatura = K.assinatura;
       registrar('Criou print para aprovação', TIPOS_PRINT[tipo] + ' · ' + P.prints.FORMATOS[K.formato].nome);
       S.compositor = null;
@@ -2198,7 +2199,7 @@
   if (P.nuvem && P.nuvem.configurado) {
     // Painel publicado: só mostra algo depois do login. A função vem do servidor.
     P.nuvem.iniciar(function (eu) {
-      S.usuario = eu; S.papel = eu.funcao; S.filtros.periodo = '30';
+      S.usuario = eu; S.papel = eu.funcao; S.filtros.periodo = (S.prefs && S.prefs.periodo) || '30';
       registrar('Entrou no painel', eu.email);
       render();
       carregarNuvem();
