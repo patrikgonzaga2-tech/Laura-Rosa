@@ -1,8 +1,10 @@
 /*
  * Painel online: login, criação de senha pelo link do e-mail e chamadas ao servidor (Supabase).
  * Só liga quando a página publicada traz assets/js/config.js (window.PAINEL_NUVEM).
- * A sessão fica só na memória da aba: nada de login é guardado no navegador.
- * Ao recarregar a página, entra de novo com e-mail e senha.
+ * Por padrão a sessão fica só na memória da aba (ao recarregar, entra de novo).
+ * Se a pessoa marcar "Manter conectado neste aparelho por 30 dias", só a chave de login
+ * vai para o localStorage, com validade de 30 dias contada do login. Nenhum dado de aluna
+ * é guardado no navegador. "Sair" apaga a chave.
  */
 (function (P) {
   'use strict';
@@ -39,9 +41,34 @@
     return { tipo: q.type || null, erro: q.error_description || q.error || null, hash: q.token_hash || null };
   }
 
+  /* "Manter conectado": a chave de login vai para o localStorage só enquanto valer o prazo. */
+  var LEMBRAR = 'painel-lembrar-ate', DIAS_LEMBRAR = 30;
+  var memoria = {};
+  function ls(acao, k, v) {
+    try {
+      if (acao === 'get') return window.localStorage.getItem(k);
+      if (acao === 'set') window.localStorage.setItem(k, v);
+      if (acao === 'del') window.localStorage.removeItem(k);
+    } catch (e) { /* navegador sem armazenamento: fica só na memória */ }
+    return null;
+  }
+  function lembrando() { var ate = +ls('get', LEMBRAR); return ate > Date.now(); }
+  function chavesLogin() {
+    var ks = [];
+    try { for (var i = 0; i < window.localStorage.length; i++) { var k = window.localStorage.key(i); if (/^sb-.*-auth-token/.test(k)) ks.push(k); } } catch (e) { /* idem */ }
+    return ks;
+  }
+  function esquecerAparelho() { ls('del', LEMBRAR); chavesLogin().forEach(function (k) { ls('del', k); }); }
+  var armazenamento = {
+    getItem: function (k) { return lembrando() ? ls('get', k) : (k in memoria ? memoria[k] : null); },
+    setItem: function (k, v) { if (lembrando()) ls('set', k, v); else memoria[k] = v; },
+    removeItem: function (k) { delete memoria[k]; ls('del', k); }
+  };
+
   function criar() {
+    if (!lembrando()) esquecerAparelho(); // prazo vencido ou nunca marcado: não deixa chave para trás
     sb = window.supabase.createClient(CFG.url, CFG.chave, {
-      auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: true }
+      auth: { persistSession: true, storage: armazenamento, autoRefreshToken: true, detectSessionInUrl: true }
     });
     return sb;
   }
@@ -84,7 +111,9 @@
       h = caixa('<form id="form-entrar" novalidate>' + aviso +
         '<label class="campo"><span>E-mail</span><input type="email" id="en-email" autocomplete="username" required value="' + esc(E.email) + '"></label>' +
         '<label class="campo"><span>Senha</span><input type="password" id="en-senha" autocomplete="current-password" required></label>' +
+        '<label class="check"><input type="checkbox" id="en-lembrar"' + (E.lembrar ? ' checked' : '') + '> Manter conectado neste aparelho por 30 dias</label>' +
         '<button type="submit" class="btn"' + dis + '>' + (E.ocupado ? 'Entrando…' : 'Entrar') + '</button></form>' +
+        '<p class="nota-peq">Não marque em computador de outra pessoa ou compartilhado.</p>' +
         '<p class="nota-peq">Primeiro acesso? Entre com a senha inicial que a Administração te passou. Em seguida você cria a sua senha.</p>' +
         '<p class="nota-peq">Esqueceu a senha? Peça para a Administração voltar a sua senha para a inicial.</p>');
     } else if (E.modo === 'esqueci') {
@@ -136,7 +165,10 @@
       if (f.id === 'form-entrar') {
         E.email = document.getElementById('en-email').value.trim();
         var senha = document.getElementById('en-senha').value;
+        E.lembrar = document.getElementById('en-lembrar').checked;
         if (!E.email || !senha) { E.erro = 'Preencha e-mail e senha.'; renderEntrada(); return; }
+        if (E.lembrar) ls('set', LEMBRAR, String(Date.now() + DIAS_LEMBRAR * 86400000));
+        else esquecerAparelho();
         E.ocupado = true; renderEntrada();
         var r = await sb.auth.signInWithPassword({ email: E.email, password: senha });
         E.ocupado = false;
@@ -212,6 +244,7 @@
 
   async function sair() {
     try { await sb.auth.signOut(); } catch (e) { /* sessão já encerrada */ }
+    esquecerAparelho();
     location.replace(location.pathname);
   }
 
