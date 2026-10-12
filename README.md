@@ -15,6 +15,8 @@ O relatório principal é a **Pauta de conteúdo e necessidades das alunas**. El
 > - **Publicado** em um projeto próprio do Vercel (separado do site): https://painel.teamcorpofeliz.com.br e https://painel-alunas-corpo-feliz.vercel.app. Só entra quem a Administração cadastrar em **Usuários**, com a senha inicial `primeironome1234`; no primeiro acesso a pessoa cria uma senha só dela. "Manter conectado" lembra o aparelho por 30 dias.
 > - **Ao vivo:** as mensagens do grupo do Telegram chegam sozinhas (bot `@CorpoFelizPainelBot` → função `painel-telegram` → banco). Revisões de classificação e autorizações ficam salvas no servidor.
 > - **Funções** (Administração, Edição, Exportação, Leitura) vêm do servidor. O primeiro nome das alunas só sai do servidor para Administração e Edição. A escolha de painéis organiza o menu de cada pessoa.
+> - **WhatsApp de suporte:** o canal "Suporte alunas" da UMCLIQUE reenvia cada mensagem para a função `painel-whatsapp` (telefone vira código; respostas da equipe buscadas no provedor).
+> - **Drive:** "Enviar ao Drive" manda os prints aprovados para `Painel de acompanhamento/Materiais autorizados/Instagram/AAAA-MM/` pela função `painel-drive` e pelo Apps Script em `integracoes/drive-apps-script.gs`.
 > - **Ainda só na aba:** fotos, prints montados e mudanças em assuntos/objeções/equipe (somem ao recarregar). O WhatsApp de suporte ainda não está ligado (etapa 9).
 > - Não há mais dados fictícios nem importação de arquivos: o painel mostra só os dados reais do servidor.
 

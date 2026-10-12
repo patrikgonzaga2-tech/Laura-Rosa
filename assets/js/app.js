@@ -63,6 +63,7 @@
     nuvem: { carregando: false, erro: '', buscadoEm: 0, grupos: [] },
     usu: { lista: null, carregando: false, erro: '', link: null, acesso: null, editando: '', ocupado: false },
     registroServidor: null,
+    drive: { verificado: false, verificando: false, configurado: false, pastaUrl: '', erro: '', enviando: '' },
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
     soNaoRevisadas: false,
@@ -1123,7 +1124,7 @@
     var prints = conj().prints || [];
     var cont = U.contarPor(prints, 'status');
     var h = '<div class="cabeca-aba"><h1>Prints para o Instagram</h1><p class="sub">Material pronto para post, montado só a partir de fotos e depoimentos autorizados. Você aprova, e os aprovados vão para a pasta da social media.</p></div>';
-    h += '<ol class="fluxo"><li><strong>Autorização</strong><span>Aluna autorizou o uso no Instagram e alguém da equipe confirmou</span></li><li><strong>Print</strong><span>Rosto oculto, quando exigido, e montagem no formato do post</span></li><li><strong>Sua aprovação</strong><span>Aprovar ou pedir ajuste</span></li><li><strong>Drive da social media</strong><span>Pasta privada, compartilhada só com ela</span></li></ol>';
+    h += '<ol class="fluxo"><li><strong>Autorização</strong><span>Aluna autorizou o uso no Instagram e alguém da equipe confirmou</span></li><li><strong>Print</strong><span>Rosto oculto, quando exigido, e montagem no formato do post</span></li><li><strong>Sua aprovação</strong><span>Aprovar ou pedir ajuste</span></li><li><strong>Drive da social media</strong><span>Pasta Materiais autorizados/Instagram, separada por mês</span></li></ol>';
 
     // Material pronto para virar print
     var fotosProntas = conj().midias.filter(function (f) { return autValida(f.aut) && !prints.some(function (p) { return p.fonte === 'midia' && p.fonteId === f.id; }); });
@@ -1146,13 +1147,55 @@
     else h += '<div class="prints">' + lista.map(cardPrint).join('') + '</div>';
 
     var aprovados = prints.filter(function (p) { return p.status === 'aprovado' && printValido(p); });
+    var novos = aprovados.filter(function (p) { return !p.driveUrl; });
+    var D = S.drive;
+    if (pode('exportar') && !D.verificado && !D.verificando) verificarDrive();
+    var rotuloBotao = D.enviando ? 'Enviando… ' + D.enviando : !D.verificado ? 'Conferindo o Drive…' : !D.configurado ? 'Enviar ao Drive (ainda não configurado)' : 'Enviar ao Drive' + (novos.length ? ' (' + novos.length + ')' : '');
     h += '<section class="painel-card"><h2>Enviar para o Drive da social media</h2>' +
-      '<p class="sub">' + aprovados.length + ' print(s) aprovado(s). Estrutura proposta: <span class="mono">Painel de acompanhamento/Materiais autorizados/Instagram/AAAA-MM/</span>, com uma lista dos arquivos sem dados pessoais.</p>' +
-      '<div class="linha-controles"><button type="button" class="btn" disabled title="Depende da configuração do Google Drive (próxima etapa)">Enviar ao Drive (ainda não conectado)</button>' +
-      (pode('exportar') ? '<button type="button" class="btn btn-sec" data-acao="pacote-drive"' + (aprovados.length ? '' : ' disabled') + '>Baixar pacote dos aprovados (.zip)</button>' : '') + '</div>' +
-      '<p class="nota-peq">Enquanto o Drive não está conectado, baixe o pacote e arraste a pasta para o Drive. Não deixe a pasta com link público: compartilhe só com o e-mail da social media.</p>' +
-      (pode('exportar') ? '' : semPermissao('baixar o pacote')) + '</section>';
+      '<p class="sub">' + aprovados.length + ' print(s) aprovado(s), ' + novos.length + ' ainda não enviado(s). Vão para <span class="mono">Painel de acompanhamento/Materiais autorizados/Instagram/AAAA-MM/</span>, com a descrição de cada arquivo (tipo, formato, quem aprovou e quem confirmou a autorização), sem dados pessoais.</p>' +
+      (pode('exportar') ? '<div class="linha-controles"><button type="button" class="btn" data-acao="drive-enviar"' + (D.configurado && novos.length && !D.enviando ? '' : ' disabled') + '>' + esc(rotuloBotao) + '</button>' +
+        '<button type="button" class="btn btn-sec" data-acao="pacote-drive"' + (aprovados.length ? '' : ' disabled') + '>Baixar pacote dos aprovados (.zip)</button>' +
+        (D.pastaUrl ? '<a class="btn btn-sec" href="' + esc(D.pastaUrl) + '" target="_blank" rel="noopener">Abrir pasta no Drive</a>' : '') + '</div>' : semPermissao('enviar ao Drive ou baixar o pacote')) +
+      (D.erro ? '<p class="erro">' + esc(D.erro) + '</p>' : '') +
+      '<p class="nota-peq">Os prints ficam só nesta aba até serem enviados: envie ao Drive antes de fechar o painel. Hoje a pasta está como "qualquer pessoa com o link pode editar"; quando tiver o e-mail da social media, restrinja.</p></section>';
     return h;
+  }
+
+  function verificarDrive() {
+    var D = S.drive;
+    D.verificando = true;
+    P.nuvem.drive({ acao: 'status' }).then(function (r) {
+      D.configurado = !!r.configurado; D.pastaUrl = r.pastaUrl || ''; D.erro = r.configurado === false && r.erro ? r.erro : '';
+    }).catch(function (e) { D.configurado = false; D.erro = e.message || P.nuvem.traduzir(e); })
+      .then(function () { D.verificado = true; D.verificando = false; if (S.aba === 'prints') render(); });
+  }
+
+  function enviarAoDrive() {
+    var D = S.drive;
+    if (!pode('exportar') || !D.configurado || D.enviando) return;
+    var fila = conj().prints.filter(function (p) { return p.status === 'aprovado' && printValido(p) && !p.driveUrl; });
+    if (!fila.length) return;
+    var feitos = 0, falhas = 0;
+    D.erro = '';
+    function proximo() {
+      if (!fila.length) {
+        D.enviando = '';
+        registrar('Enviou prints ao Drive', feitos + ' enviado(s)' + (falhas ? ', ' + falhas + ' com falha' : ''));
+        avisar(feitos + ' print(s) no Drive' + (falhas ? '. ' + falhas + ' falharam: tente de novo.' : '.'));
+        render();
+        return;
+      }
+      var p = fila.shift(), f = fonteDoPrint(p);
+      D.enviando = (feitos + falhas + 1) + ' de ' + (feitos + falhas + 1 + fila.length);
+      render();
+      P.nuvem.drive({
+        nome: nomeArquivoPrint(p), mes: U.chaveDia(p.aprovadoEm || Date.now()).slice(0, 7), base64: p.url.split(',')[1],
+        descricao: TIPOS_PRINT[p.tipo] + ' | ' + P.prints.FORMATOS[p.formato].nome + ' | aprovado por ' + p.aprovadoPor + ' em ' + U.fmtDataAno(p.aprovadoEm) + ' | autorização confirmada por ' + (f && f.aut ? f.aut.confirmadoPor : '')
+      }).then(function (r) { p.driveUrl = r.url; p.driveEm = Date.now(); if (r.pastaUrl) D.pastaUrl = r.pastaUrl; feitos++; })
+        .catch(function (e) { falhas++; D.erro = e.message || P.nuvem.traduzir(e); })
+        .then(proximo);
+    }
+    proximo();
   }
 
   function cardPrint(p) {
@@ -1163,6 +1206,7 @@
       '<div class="foto-corpo"><div class="item-meta"><span class="chip">' + esc(TIPOS_PRINT[p.tipo]) + '</span><span class="chip">' + esc(fmt.nome.split(' (')[0]) + '</span>' +
       '<span class="st-print st-' + p.status + '">' + esc(STATUS_PRINT[p.status]) + '</span></div>' +
       '<p class="sub">' + esc(rotuloAluna(p.alunaId)) + ' · criado em ' + U.fmtDataHora(p.criadoEm) + (p.aprovadoEm ? ' · aprovado por ' + esc(p.aprovadoPor) + ' em ' + U.fmtDataAno(p.aprovadoEm) : '') + (p.pacoteEm ? ' · no pacote de ' + U.fmtDataAno(p.pacoteEm) : '') + '</p>' +
+      (p.driveUrl ? '<p class="sub"><a href="' + esc(p.driveUrl) + '" target="_blank" rel="noopener">No Drive</a> desde ' + U.fmtDataHora(p.driveEm) + '</p>' : '') +
       (p.nota ? '<p class="nota-peq">Ajuste pedido: ' + esc(p.nota) + '</p>' : '') +
       (!valido ? '<p class="erro">A autorização não vale mais. Não usar.</p>' : '');
     var acoes = '';
@@ -1175,7 +1219,8 @@
   }
 
   function nomeArquivoPrint(p) {
-    return U.chaveDia(p.aprovadoEm || p.criadoEm) + '_' + p.tipo.replace('_', '-') + '_' + p.formato + '_' + p.id + '.png';
+    // Código único por print (data e hora de criação), para não confundir com prints de outras sessões no Drive.
+    return U.chaveDia(p.aprovadoEm || p.criadoEm) + '_' + p.tipo.replace('_', '-') + '_' + p.formato + '_' + Number(p.criadoEm).toString(36) + '.png';
   }
 
   function blobDeDataURL(url) {
@@ -1938,6 +1983,7 @@
       render();
     },
     'pacote-drive': function () { if (pode('exportar')) baixarPacote(); },
+    'drive-enviar': function () { enviarAoDrive(); },
     'ir-fotos': function () { S.aba = 'resultados'; S.subRes = 'fotos'; render(); window.scrollTo(0, 0); },
     'conv-mostrar': function (b) { S.conv.mostrar = b.dataset.v; render(); },
     'foto-adicionar': function () {

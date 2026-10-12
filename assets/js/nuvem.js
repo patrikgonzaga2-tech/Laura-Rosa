@@ -81,8 +81,10 @@
     return r.data;
   }
 
-  async function usuarios(corpo) {
-    var r = await sb.functions.invoke('painel-usuarios', { body: corpo });
+  async function usuarios(corpo) { return funcao('painel-usuarios', corpo); }
+
+  async function funcao(nome, corpo) {
+    var r = await sb.functions.invoke(nome, { body: corpo });
     if (r.error) {
       var detalhe = null;
       try { detalhe = await r.error.context.json(); } catch (e) { /* sem corpo */ }
@@ -258,6 +260,7 @@
     revisar: function (id, tipo, tema) { return rpc('painel_revisar', { p_id: id, p_tipo: tipo, p_tema: tema }); },
     autorizar: function (id, status, por) { return rpc('painel_autorizar', { p_id: id, p_status: status, p_por: por || '' }); },
     registro: function () { return rpc('painel_registro', { p_limite: 200 }); },
-    usuarios: usuarios
+    usuarios: usuarios,
+    drive: function (corpo) { return funcao('painel-drive', corpo); }
   };
 })(window.Painel);
