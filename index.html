@@ -20,24 +20,11 @@
     <span class="marca-sub" id="status-dados" aria-live="polite"></span>
   </div>
   <div class="topo-controles">
-    <button type="button" class="btn btn-sec btn-peq" data-acao="atualizar" title="Mostra até quando vão os dados, recalcula as análises e leva para importar o arquivo mais novo">Atualizar dados</button>
-    <div class="seg" role="group" aria-label="Fonte dos dados">
-      <button type="button" data-acao="modo" data-v="nuvem" aria-pressed="false" hidden>Ao vivo</button>
-      <button type="button" data-acao="modo" data-v="import" aria-pressed="false">Importados</button>
-      <button type="button" data-acao="modo" data-v="demo" aria-pressed="true">Exemplo fictício</button>
-    </div>
+    <button type="button" class="btn btn-sec btn-peq" data-acao="atualizar" title="Busca as mensagens novas do servidor e recalcula as análises">Atualizar dados</button>
     <div class="conta" id="conta" hidden><span class="conta-nome"></span> <button type="button" class="btn btn-sec btn-peq" data-acao="minha-conta">Minha conta</button> <button type="button" class="btn btn-sec btn-peq" data-acao="sair">Sair</button></div>
-    <label class="papel" id="papel-rotulo"><span>Ver como</span>
-      <select id="papel" data-mudar="papel">
-        <option value="leitura">Leitura</option>
-        <option value="edicao">Edição</option>
-        <option value="exportacao">Exportação</option>
-        <option value="admin" selected>Administração</option>
-      </select>
-    </label>
   </div>
 </header>
-<div id="faixa" class="faixa faixa-demo" role="note"></div>
+<div id="faixa" class="faixa faixa-nuvem" role="note"></div>
 <div class="casca">
   <nav id="nav" class="nav" aria-label="Seções do painel"></nav>
   <main id="conteudo" class="principal" tabindex="-1">
@@ -52,14 +39,12 @@
 <script src="assets/vendor/jszip-3.10.1.min.js"></script>
 <!-- Supabase JS 2.45.4 (licença MIT): login e leitura dos dados no painel publicado. -->
 <script src="assets/vendor/supabase-js-2.45.4.min.js"></script>
-<!-- config.js só existe no painel publicado (endereço do servidor e chave pública). Sem ele, o painel abre como protótipo. -->
+<!-- config.js só existe no painel publicado (endereço do servidor e chave pública). Sem ele, o painel avisa que falta a configuração. -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/util.js"></script>
 <script src="assets/js/classificador.js"></script>
 <script src="assets/js/privacidade.js"></script>
-<script src="assets/js/importadores.js"></script>
 <script src="assets/js/prints.js"></script>
-<script src="assets/js/dados-demo.js"></script>
 <script src="assets/js/grafico.js"></script>
 <script src="assets/js/pauta.js"></script>
 <script src="assets/js/analise.js"></script>

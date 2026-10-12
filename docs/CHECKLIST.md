@@ -4,7 +4,7 @@ Vamos preencher um item por vez. ✅ = já respondido.
 
 ## Conteúdo e operação
 - [x] ✅ Tema da comunidade e assuntos frequentes (viraram as categorias iniciais, editáveis em Configurações)
-- [ ] Revisar a lista de assuntos e as palavras-chave do protótipo
+- [ ] Revisar a lista de assuntos e as palavras-chave
 - [x] ✅ Objetivo do painel: organizar e gerar ideias, não responder (então não guardamos contato)
 - [ ] Revisar as objeções e o "como quebrar" de cada uma (Configurações)
 - [ ] Nomes e funções da equipe (quem edita, quem exporta, quem administra)
@@ -31,7 +31,7 @@ Vamos preencher um item por vez. ✅ = já respondido.
 
 ## Fotos e prints para o Instagram
 - [x] ✅ Prints aprovados por você e enviados ao Drive da social media
-- [ ] Confirmar formatos (o protótipo usa 1080×1350 feed, 1080×1920 stories e 1080×1080 quadrado)
+- [ ] Confirmar formatos (o painel usa 1080×1350 feed, 1080×1920 stories e 1080×1080 quadrado)
 - [ ] @ do perfil e cores que devem aparecer nos prints
 - [ ] E-mail da social media (para compartilhar só a pasta de materiais autorizados)
 - [ ] Regra para o rosto: sempre ocultar, ou mostrar só com autorização específica

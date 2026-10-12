@@ -15,7 +15,7 @@ const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const db = createClient(URL_SB, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const FUNCOES = ["admin", "edicao", "exportacao", "leitura"];
-const PAINEIS = ["visao", "dia", "dores", "resultados", "ideias", "prints", "ajuda", "mensagens", "importar", "relatorios"];
+const PAINEIS = ["visao", "dia", "dores", "resultados", "ideias", "prints", "ajuda", "mensagens", "relatorios"];
 
 const CORS = {
   "access-control-allow-origin": "*",

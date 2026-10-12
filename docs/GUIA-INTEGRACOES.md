@@ -5,15 +5,9 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 **Regras para todas as integrações:**
 - Nenhuma senha, código de verificação ou token é enviado pelo chat. Cada chave é colada direto no painel do provedor ou nos *secrets* do servidor.
 - Primeiro testamos num ambiente controlado: um grupo de teste ou um número de teste, só com pessoas da equipe.
-- Até a conexão ser configurada e testada, o painel continua mostrando "importação manual" ou "dados fictícios".
+- O painel mostra só dados reais que chegam pelo servidor. Não há mais importação manual nem dados fictícios.
 
 ---
-
-## Etapa 0: importação manual (já disponível no protótipo)
-- **WhatsApp:** no celular, abra a conversa e toque em *Mais → Exportar conversa → Sem mídia* para gerar o `.txt`.
-- **Telegram:** no Telegram Desktop, abra o grupo e use *Exportar histórico do chat* no formato *JSON legível por máquina* para gerar o `result.json`.
-- **Planilha:** use o modelo `.csv` disponível na tela Importar.
-- **Limitação:** é manual e não atualiza sozinho. Em compensação, não exige nenhuma configuração externa.
 
 ## Etapa A: Telegram (a principal fonte e a mais simples de automatizar)
 **Como funciona:** um bot oficial criado no @BotFather entra no grupo. O Telegram envia cada nova mensagem para uma função no servidor (webhook), que grava no banco.
@@ -26,7 +20,7 @@ As integrações serão feitas **uma de cada vez**, e só passamos para a próxi
 **O que o bot consegue ler:**
 - Com o *modo de privacidade* ligado (padrão), ele só recebe comandos, menções e respostas às mensagens dele.
 - Para ler todas as mensagens do grupo, ele precisa ser **administrador** ou ter o modo de privacidade **desligado** (@BotFather → `/setprivacy` → Disable). Depois de mudar essa opção, é preciso remover e adicionar o bot de novo no grupo.
-- Ele **não lê mensagens anteriores** à entrada dele. O histórico antigo entra pela importação manual (JSON).
+- Ele **não lê mensagens anteriores** à entrada dele.
 - Fotos chegam como arquivo e só são guardadas se a regra de autorização permitir.
 
 **Como testar sem expor as alunas:**

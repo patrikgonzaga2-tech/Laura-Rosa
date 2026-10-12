@@ -15,9 +15,7 @@ O repositório do projeto no GitHub é `patrikgonzaga2-tech/Laura-Rosa`.
 4. Se o painel estiver em outro ramo (*branch*), troque em **Current branch** no topo.
 
 ## 3. Abrir o painel
-1. No GitHub Desktop, clique em **Repository → Show in Explorer** (Windows) ou **Show in Finder** (Mac).
-2. Dê dois cliques em **index.html**.
-3. Para testar a importação, use os arquivos da pasta `exemplos/`.
+Use o endereço publicado: https://painel.teamcorpofeliz.com.br. Aberto direto do arquivo `index.html`, o painel só avisa que falta a configuração do servidor (ela é criada na publicação pelo Vercel).
 
 ## 4. Salvar uma nova versão (commit)
 1. Faça a alteração nos arquivos (por exemplo, editando um texto).

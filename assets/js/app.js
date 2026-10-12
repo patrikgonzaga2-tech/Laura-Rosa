@@ -1,11 +1,11 @@
 /*
- * Painel de acompanhamento das alunas: protótipo navegável.
+ * Painel de acompanhamento das alunas.
  * Objetivo: juntar e organizar o que as alunas trazem (dores, objeções, resultados,
  * antes e depois, interação no grupo) e transformar em ideias de conteúdo e de cuidado.
  * O painel não responde ninguém e não guarda telefone ou contato.
- * Sem o arquivo de configuração (assets/js/config.js) é um protótipo: estado só em memória e
- * permissões SIMULADAS ("Ver como"). Com ele, o painel pede login (nuvem.js), a função vem do
- * servidor e as mensagens do Telegram chegam "Ao vivo"; revisões e autorizações ficam salvas lá.
+ * O painel pede login (nuvem.js), a função de cada pessoa vem do servidor e as mensagens do
+ * grupo do Telegram chegam sozinhas; revisões e autorizações ficam salvas no servidor.
+ * Precisa do arquivo de configuração assets/js/config.js, criado na publicação.
  */
 (function (P) {
   'use strict';
@@ -38,12 +38,10 @@
     { id: 'prints', nome: 'Prints para o Instagram', grupo: 'Criar' },
     { id: 'ajuda', nome: 'Como ajudar mais', grupo: 'Cuidar' },
     { id: 'mensagens', nome: 'Mensagens e revisão', grupo: 'Dados' },
-    { id: 'importar', nome: 'Importar dados', grupo: 'Dados' },
     { id: 'relatorios', nome: 'Relatórios', grupo: 'Dados' },
     { id: 'config', nome: 'Configurações', grupo: '' },
     { id: 'usuarios', nome: 'Usuários', grupo: '' }
   ];
-  var MODOS = { demo: 'Exemplo fictício', import: 'Dados importados', nuvem: 'Ao vivo (Telegram)' };
   var FUNCAO_TXT = {
     admin: 'Tudo, inclusive usuários, assuntos, objeções e aprovação de prints.',
     edicao: 'Revisa classificações e autorizações e vê o primeiro nome. Não exporta.',
@@ -52,8 +50,7 @@
   };
 
   var S = {
-    modo: 'demo',
-    papel: 'admin',
+    papel: 'leitura',
     aba: 'visao',
     subDores: 'objecoes',
     subRes: 'ideias',
@@ -61,7 +58,7 @@
     objecoes: A.objecoesPadrao(),
     resultados: A.resultadosPadrao(),
     equipe: ['Coordenação', 'Equipe 1', 'Equipe 2'],
-    dados: { demo: null, import: { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] }, nuvem: { alunas: {}, mensagens: [], midias: [], prints: [] } },
+    dados: { alunas: {}, mensagens: [], midias: [], prints: [] },
     usuario: null,
     nuvem: { carregando: false, erro: '', buscadoEm: 0, grupos: [] },
     usu: { lista: null, carregando: false, erro: '', link: null, acesso: null, editando: '', ocupado: false },
@@ -76,13 +73,8 @@
     subPrints: 'aguardando',
     compositor: null,
     rel: { tipo: 'pauta', soRevisadas: true, secoes: { numeros: true, temas: true, dores: true, depoimentos: true } },
-    impOrigem: 'whatsapp',
-    impCanal: 'whatsapp',
-    impPrevia: null,
-    seqImport: 0,
     auditoria: [],
     editor: null,
-    confirmarLimpeza: false,
     prefs: null,
     visAtual: '',
     menuAberto: false,
@@ -97,7 +89,7 @@
   /* ---------- acesso aos dados ---------- */
 
   function pode(p) { return PAPEIS[S.papel][p]; }
-  function conj() { return S.dados[S.modo]; }
+  function conj() { return S.dados; }
   function alunasAtuais() { return conj().alunas; }
   function msgsAlunas() { return conj().mensagens.filter(function (m) { return !m.equipe; }); }
   function nomeTema(id) { var t = S.temas.find(function (x) { return x.id === id; }); return t ? t.nome : 'Outros assuntos'; }
@@ -106,9 +98,9 @@
   function ehProva(m) { return m.tipo === 'depoimento' || m.tipo === 'evolucao'; }
 
   function registrar(acao, detalhe) {
-    S.auditoria.unshift({ quando: Date.now(), papel: S.usuario ? quemSou() : PAPEIS[S.papel].nome, modo: MODOS[S.modo], acao: acao, detalhe: detalhe || '' });
+    S.auditoria.unshift({ quando: Date.now(), papel: quemSou(), acao: acao, detalhe: detalhe || '' });
   }
-  function quemSou() { return S.usuario ? (S.usuario.nome || S.usuario.email) : PAPEIS[S.papel].nome + ' (login simulado)'; }
+  function quemSou() { return S.usuario ? (S.usuario.nome || S.usuario.email) : ''; }
 
   // Com login, cada pessoa só vê os painéis liberados para ela. Configurações sempre aparece; Usuários só para Administração.
   function abaPermitida(id) {
@@ -207,7 +199,7 @@
     objecoes: { nome: 'Mensagens com objeção', un: 'mensagens', sentido: 'ruim', conta: function (m) { return !ehProva(m) && A.detectar(m.texto, S.objecoes).length > 0; }, desc: 'Mensagens com alguma das objeções cadastradas em Configurações.' },
     depoimentos: { nome: 'Depoimentos positivos', un: 'mensagens', sentido: 'bom', conta: function (m) { return m.tipo === 'depoimento'; }, desc: 'Elogios e relatos de experiência na comunidade.' },
     evolucao: { nome: 'Relatos de evolução', un: 'mensagens', sentido: 'bom', conta: function (m) { return m.tipo === 'evolucao'; }, desc: 'Resultados contados pelas alunas.' },
-    semResposta: { nome: 'Perguntas sem resposta registrada', un: 'mensagens', sentido: 'ruim', conta: function (m) { return ehDor(m) && !m.resposta; }, desc: 'Dúvidas, dificuldades e queixas sem resposta da equipe nos arquivos importados.' },
+    semResposta: { nome: 'Perguntas sem resposta registrada', un: 'mensagens', sentido: 'ruim', conta: function (m) { return ehDor(m) && !m.resposta; }, desc: 'Dúvidas, dificuldades e queixas sem resposta registrada da equipe.' },
     naoRevisadas: { nome: 'Classificações sem revisão', un: 'mensagens', sentido: 'ruim', conta: function (m) { return !m.revisado; }, desc: 'Mensagens que ainda têm só a sugestão automática.' },
     autorizados: { nome: 'Relatos autorizados para divulgação', un: 'mensagens', sentido: 'bom', conta: prontoDivulgacao, desc: 'Depoimentos e relatos revisados, com autorização e quem confirmou.' },
     alunas: { nome: 'Alunas que escreveram', un: 'alunas', sentido: 'neutro', desc: 'Pessoas diferentes que mandaram mensagem no período.',
@@ -368,7 +360,7 @@
   }
 
   function semPermissao(acao) {
-    return '<p class="nota nota-trava"><span aria-hidden="true">🔒</span> Sua função (' + esc(PAPEIS[S.papel].nome) + ') não permite ' + acao + '.' + (S.usuario ? ' Se precisar, peça à administração.' : ' Troque em "Ver como" para testar outro acesso.') + '</p>';
+    return '<p class="nota nota-trava"><span aria-hidden="true">🔒</span> Sua função (' + esc(PAPEIS[S.papel].nome) + ') não permite ' + acao + '. Se precisar, peça à administração.</p>';
   }
 
   function subnav(chave, itens) {
@@ -388,32 +380,18 @@
   /* ---------- moldura ---------- */
 
   function renderMoldura() {
-    document.querySelectorAll('[data-acao="modo"]').forEach(function (b) {
-      b.setAttribute('aria-pressed', String(b.dataset.v === S.modo));
-      if (b.dataset.v === 'nuvem') b.hidden = !S.usuario;
-    });
-    document.getElementById('papel').value = S.papel;
-    document.getElementById('papel-rotulo').hidden = !!S.usuario;
     var conta = document.getElementById('conta');
     conta.hidden = !S.usuario;
     if (S.usuario) conta.querySelector('.conta-nome').textContent = (S.usuario.nome || S.usuario.email) + ' · ' + PAPEIS[S.papel].nome;
 
     var ultima = 0;
     conj().mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
-    document.getElementById('status-dados').textContent = (S.nuvem.carregando && S.modo === 'nuvem' ? 'Buscando mensagens…' : MODOS[S.modo]) +
+    document.getElementById('status-dados').textContent = (S.nuvem.carregando ? 'Buscando mensagens…' : 'Telegram ao vivo') +
       (ultima ? ' · mensagens até ' + U.fmtDataHora(ultima) : ' · sem mensagens') + ' · análises às ' + U.fmtHora(S.calculadoEm);
 
     var faixa = document.getElementById('faixa');
-    if (S.modo === 'demo') {
-      faixa.className = 'faixa faixa-demo';
-      faixa.innerHTML = '<strong>Dados fictícios.</strong> Pessoas, mensagens e imagens são exemplos.' + (S.usuario ? '' : ' Login e permissões são simulados.');
-    } else if (S.modo === 'nuvem') {
-      faixa.className = 'faixa faixa-nuvem';
-      faixa.innerHTML = '<strong>Dados reais do grupo do Telegram.</strong> Revisões e autorizações ficam salvas no servidor. Fotos e prints montados aqui ainda ficam só nesta aba.';
-    } else {
-      faixa.className = 'faixa faixa-import';
-      faixa.innerHTML = '<strong>Dados importados.</strong> Ficam só nesta aba e somem ao recarregar.' + (S.usuario ? '' : ' Login e permissões são simulados.');
-    }
+    faixa.className = 'faixa faixa-nuvem';
+    faixa.innerHTML = '<strong>Dados reais do grupo do Telegram.</strong> Revisões e autorizações ficam salvas no servidor. Fotos e prints montados aqui ainda ficam só nesta aba.';
 
     var aguardando = (conj().prints || []).filter(function (x) { return x.status === 'aguardando'; }).length;
     var grupos = [];
@@ -477,21 +455,15 @@
     renderMoldura();
     renderFiltros();
     var el = document.getElementById('aba');
-    var semDados = !conj().mensagens.length && ['importar', 'config', 'usuarios'].indexOf(S.aba) === -1 && !(S.aba === 'resultados' && S.subRes === 'fotos' && S.modo === 'import');
-    if (semDados && S.modo === 'nuvem') {
+    var semDados = !conj().mensagens.length && ['config', 'usuarios'].indexOf(S.aba) === -1 && !(S.aba === 'resultados' && S.subRes === 'fotos');
+    if (semDados) {
       el.innerHTML = S.nuvem.carregando ? vazio('Buscando mensagens…', 'Um instante.') : S.nuvem.erro ?
         vazio('Não consegui buscar as mensagens', esc(S.nuvem.erro), '<button type="button" class="btn" data-acao="nuvem-recarregar">Tentar de novo</button>') :
         vazio('Ainda não chegaram mensagens', 'O bot já está no grupo. Assim que as alunas escreverem no grupo do Telegram, as mensagens aparecem aqui. Use "Atualizar dados" para buscar as novas.',
           '<button type="button" class="btn" data-acao="nuvem-recarregar">Buscar agora</button>');
       return;
     }
-    if (semDados) {
-      el.innerHTML = vazio('Nenhum dado importado ainda',
-        'Para ver seus dados aqui, importe um arquivo exportado do WhatsApp, do Telegram ou uma planilha. Os dados ficam só nesta aba e não se misturam com o exemplo fictício.',
-        '<button type="button" class="btn" data-acao="aba" data-v="importar">Ir para Importar</button>');
-      return;
-    }
-    var fn = { visao: abaVisao, dia: abaDia, prints: abaPrints, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, importar: abaImportar, config: abaConfig, usuarios: abaUsuarios }[S.aba];
+    var fn = { visao: abaVisao, dia: abaDia, prints: abaPrints, dores: abaDores, resultados: abaResultados, ideias: abaIdeias, ajuda: abaAjuda, mensagens: abaMensagens, relatorios: abaRelatorios, config: abaConfig, usuarios: abaUsuarios }[S.aba];
     el.innerHTML = fn();
     if (S.aba === 'visao') desenharGrafico();
     if (S.aba === 'mensagens') renderListaMensagens();
@@ -622,7 +594,7 @@
   }
 
   function blocoInteracao(inter, n) {
-    if (!inter.posts.length) return '<p class="sub">Sem mensagens da equipe no Telegram neste período. Ao importar o grupo, marque quem é da equipe.</p>';
+    if (!inter.posts.length) return '<p class="sub">Sem mensagens da equipe no Telegram neste período. Quem é administrador do grupo conta como equipe.</p>';
     return '<p class="sub">Respostas das alunas até 3 h depois de cada mensagem sua. Média: ' + inter.media.toFixed(1).replace('.', ',') + '.</p><ol class="ideias">' + inter.posts.slice(0, n).map(function (x) {
       return '<li><span>' + citar(x.texto) + '</span><span class="sub">' + x.media.toFixed(1).replace('.', ',') + ' respostas em média' + (x.vezes > 1 ? ' · enviada ' + x.vezes + 'x' : '') + '</span></li>';
     }).join('') + '</ol>';
@@ -690,7 +662,7 @@
       '<button type="button" data-acao="conv-mostrar" data-v="todas" aria-pressed="' + (S.conv.mostrar === 'todas') + '">Todas as mensagens</button></div></div>' +
       '<label class="check"><input type="checkbox" id="conv-sem" data-mudar="conv-sem"' + (S.conv.semResposta ? ' checked' : '') + '> Só as que não têm resposta registrada</label>' +
       (lista.length ? '<div class="itens">' + lista.map(itemConversa).join('') + '</div>' : '<p class="sub">Nada para mostrar com essas opções.</p>') +
-      '<p class="nota-peq">A resposta vem dos arquivos importados. No Telegram, usamos o "responder" da mensagem. No WhatsApp, a primeira mensagem da equipe depois da pergunta (ligação estimada pelo horário).</p></section>';
+      '<p class="nota-peq">No Telegram, a resposta vem do "responder" da mensagem. Sem isso, usamos a primeira mensagem da equipe depois da pergunta (ligação estimada pelo horário).</p></section>';
 
     h += blocoSinais(U.fimDia(dia), 6);
     return h;
@@ -930,9 +902,7 @@
   function subFotos() {
     var ms = conj().midias;
     var h = '<p class="sub">Acesso restrito. O arquivo original nunca é alterado: ocultar rosto, nome ou foto de perfil gera uma cópia separada, com prévia antes de salvar. Nada fica público por padrão.</p>';
-    if (S.modo === 'demo') {
-      h += '<p class="nota">As imagens abaixo são <strong>ilustrações fictícias</strong> (silhuetas desenhadas pelo painel), não fotos de pessoas. Servem para testar autorização, desfoque e montagem de prints.</p>';
-    } else if (pode('editar')) {
+    if (pode('editar')) {
       h += '<section class="painel-card"><h2>Adicionar antes e depois ou print de conversa</h2><p class="sub">Fica só na memória desta aba e some ao recarregar. Use apenas material que a aluna enviou. Para print de conversa (depoimento), envie só o primeiro arquivo.</p>' +
         '<div class="linha-controles">' +
         '<label class="campo"><span>Aluna</span><select id="foto-aluna">' + opcoes(Object.keys(alunasAtuais()).reduce(function (r, id) { r[id] = rotuloAluna(id); return r; }, {}), '', 'Sem vínculo') + '</select></label>' +
@@ -941,7 +911,7 @@
         '<label class="campo"><span>Foto de depois</span><input type="file" id="foto-depois" accept="image/*"></label>' +
         '<div class="campo campo-botao"><button type="button" class="btn" data-acao="foto-adicionar">Adicionar</button></div></div></section>';
     }
-    if (!ms.length) return h + vazio('Nenhuma foto ainda', S.modo === 'demo' ? 'Sem ilustrações.' : 'Adicione material acima para testar o fluxo.');
+    if (!ms.length) return h + vazio('Nenhuma foto ainda', pode('editar') ? 'Adicione acima o antes e depois ou o print que a aluna enviou.' : 'Ainda não há fotos.');
     return h + '<div class="galeria">' + ms.map(cardFoto).join('') + '</div>';
   }
 
@@ -1217,20 +1187,18 @@
   function baixarPacote() {
     var aprovados = conj().prints.filter(function (p) { return p.status === 'aprovado' && printValido(p); });
     if (!aprovados.length) return;
-    var demo = S.modo === 'demo';
     var mes = U.chaveDia(Date.now()).slice(0, 7);
-    var leia = (demo ? '*** MATERIAL FICTÍCIO DE DEMONSTRAÇÃO. NÃO PUBLICAR. ***\n\n' : '') +
-      'Prints aprovados para o Instagram (' + U.fmtDataAno(Date.now()) + ')\nAntes de publicar: confira se a autorização continua válida no painel.\n\n' +
+    var leia = 'Prints aprovados para o Instagram (' + U.fmtDataAno(Date.now()) + ')\nAntes de publicar: confira se a autorização continua válida no painel.\n\n' +
       aprovados.map(function (p) {
         var f = fonteDoPrint(p);
         return nomeArquivoPrint(p) + ' | ' + TIPOS_PRINT[p.tipo] + ' | ' + P.prints.FORMATOS[p.formato].nome + ' | aprovado por ' + p.aprovadoPor + ' em ' + U.fmtDataAno(p.aprovadoEm) + ' | autorização confirmada por ' + (f.aut ? f.aut.confirmadoPor : '');
       }).join('\n') + '\n';
-    var pasta = (demo ? 'FICTICIO-' : '') + 'Instagram/' + mes + '/';
+    var pasta = 'Instagram/' + mes + '/';
     if (window.JSZip) {
       var zip = new window.JSZip();
       aprovados.forEach(function (p) { zip.file(pasta + nomeArquivoPrint(p), p.url.split(',')[1], { base64: true }); });
       zip.file(pasta + 'LEIA-ME.txt', leia);
-      zip.generateAsync({ type: 'blob' }).then(function (b) { U.baixar((demo ? 'FICTICIO-' : '') + 'prints-aprovados-' + U.chaveDia(Date.now()) + '.zip', b); });
+      zip.generateAsync({ type: 'blob' }).then(function (b) { U.baixar('prints-aprovados-' + U.chaveDia(Date.now()) + '.zip', b); });
     } else {
       aprovados.forEach(function (p, i) { setTimeout(function () { U.baixar(nomeArquivoPrint(p), blobDeDataURL(p.url)); }, i * 400); });
       U.baixar('LEIA-ME.txt', leia, 'text/plain');
@@ -1301,25 +1269,16 @@
     var fim = c.mensagens.length ? refFim() : null;
     var ultima = 0;
     c.mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
-    var arquivos = c.arquivos || [];
     var h = '<div class="modal-caixa modal-estreito" role="dialog" aria-modal="true" aria-labelledby="at-tit">' +
       '<div class="card-topo"><h2 id="at-tit">Atualizar dados</h2><button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
-      '<dl class="status-lista"><div><dt>Fonte na tela</dt><dd>' + (S.modo === 'import' ? 'Dados importados nesta aba' : MODOS[S.modo]) + '</dd></div>' +
-      (S.modo === 'nuvem' ? '<div><dt>Grupos</dt><dd>' + (S.nuvem.grupos.length ? S.nuvem.grupos.map(esc).join(', ') : 'nenhuma mensagem ainda') + '</dd></div>' +
-        '<div><dt>Última busca</dt><dd>' + (S.nuvem.buscadoEm ? U.fmtDataHora(S.nuvem.buscadoEm) : 'ainda não') + '</dd></div>' : '') +
+      '<dl class="status-lista"><div><dt>Grupos</dt><dd>' + (S.nuvem.grupos.length ? S.nuvem.grupos.map(esc).join(', ') : 'nenhuma mensagem ainda') + '</dd></div>' +
+      '<div><dt>Última busca</dt><dd>' + (S.nuvem.buscadoEm ? U.fmtDataHora(S.nuvem.buscadoEm) : 'ainda não') + '</dd></div>' +
       '<div><dt>Mensagens até</dt><dd>' + (ultima ? U.fmtDataHora(ultima) : 'sem mensagens') + '</dd></div>' +
       '<div><dt>Análises calculadas às</dt><dd>' + U.fmtDataHora(S.calculadoEm) + '</dd></div></dl>';
-    if (S.modo === 'import' && arquivos.length) {
-      h += '<h3>Arquivos importados</h3><div class="tabela-rolagem"><table class="tab"><thead><tr><th>Arquivo</th><th>Canal</th><th>Novas</th><th>Repetidas ignoradas</th><th>Importado em</th></tr></thead><tbody>' +
-        arquivos.map(function (a) { return '<tr><td>' + esc(a.nome) + '</td><td>' + esc(CANAIS[a.canal] || a.canal) + '</td><td>' + a.novas + '</td><td>' + a.repetidas + '</td><td class="mono">' + U.fmtDataHora(a.quando) + '</td></tr>'; }).join('') + '</tbody></table></div>';
-    }
     h += '<h3>O que você pode fazer</h3><ul class="acoes-explicadas">' +
-      (S.modo === 'nuvem' ? '<li><button type="button" class="btn btn-peq" data-acao="nuvem-recarregar">Buscar mensagens novas</button><span class="sub">Traz do servidor tudo o que chegou do grupo do Telegram nos últimos 60 dias. O painel também busca sozinho a cada 5 minutos enquanto você está na Visão geral ou em Conversas do dia.</span></li>' : '') +
-      '<li><button type="button" class="btn btn-peq' + (S.modo === 'nuvem' ? ' btn-sec' : '') + '" data-acao="ir-importar">Importar arquivo mais recente</button><span class="sub">Leva para a tela Importar. Mensagens que já estão no painel são reconhecidas e ignoradas, então pode importar a conversa inteira de novo.</span></li>' +
+      '<li><button type="button" class="btn btn-peq" data-acao="nuvem-recarregar">Buscar mensagens novas</button><span class="sub">Traz do servidor tudo o que chegou do grupo do Telegram nos últimos 60 dias. O painel também busca sozinho a cada 5 minutos enquanto você está na Visão geral ou em Conversas do dia.</span></li>' +
       '<li><button type="button" class="btn btn-sec btn-peq" data-acao="recalcular"' + (pode('editar') ? '' : ' disabled') + '>Recalcular análises</button><span class="sub">Refaz a classificação automática das mensagens não revisadas com as palavras-chave atuais e recalcula todos os números. As revisadas não mudam.' + (pode('editar') ? '' : ' Precisa da função Edição ou Administração.') + '</span></li></ul>' +
-      '<p class="nota-peq">' + (S.modo === 'demo' ? 'O exemplo fictício não tem fonte externa: os dados não mudam ao atualizar. ' : '') +
-      (S.usuario ? (S.modo === 'nuvem' ? 'O WhatsApp ainda não entra automaticamente: por enquanto, importe a conversa exportada em "Importar dados".' : 'Para ver as mensagens do Telegram que chegam sozinhas, escolha "Ao vivo" no topo.') :
-        'Atualização automática só no painel online, com login.') + '</p></div>';
+      '<p class="nota-peq">O WhatsApp de suporte ainda não está ligado ao painel.</p></div>';
     abrirModal(h);
     S.modalAtivo = 'atualizar';
   }
@@ -1353,7 +1312,6 @@
     var base = filtrar(msgsAlunas(), iv);
     var naoRev = base.filter(function (m) { return !m.revisado; }).length;
     var lista = S.rel.soRevisadas ? base.filter(function (m) { return m.revisado; }) : base;
-    var demo = S.modo === 'demo';
     var sec = S.rel.secoes;
     var filtrosTxt = ['canal', 'tema', 'tipo', 'autorizacao'].filter(function (k) { return S.filtros[k]; }).map(function (k) {
       var v = S.filtros[k];
@@ -1361,7 +1319,6 @@
     });
     var h = [], t = [], csv = [];
     var titulo = { pauta: 'Pauta de conteúdo e necessidades das alunas', interno: 'Relatório interno em números', divulgacao: 'Material autorizado para divulgação' }[S.rel.tipo];
-    if (demo) { h.push('<p class="rel-demo">DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO</p>'); t.push('*** DADOS FICTÍCIOS · DEMONSTRAÇÃO · NÃO USAR EM DIVULGAÇÃO ***'); }
     h.push('<h2>' + titulo + '</h2>');
     var cab = 'Período: ' + U.fmtDataAno(iv[0]) + ' a ' + U.fmtDataAno(iv[1]) + (filtrosTxt.length ? ' · ' + filtrosTxt.join(' · ') : '') + ' · Gerado em ' + U.fmtDataHora(Date.now());
     h.push('<p class="rel-meta">' + esc(cab) + '</p>');
@@ -1445,8 +1402,7 @@
   }
 
   function csvTexto(linhas) {
-    var aviso = S.modo === 'demo' ? 'DADOS FICTÍCIOS - DEMONSTRAÇÃO\n' : '';
-    return '\ufeff' + aviso + linhas.map(function (l) { return l.map(function (v) { v = String(v == null ? '' : v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';'); }).join('\n');
+    return '\ufeff' + linhas.map(function (l) { return l.map(function (v) { v = String(v == null ? '' : v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';'); }).join('\n');
   }
 
   function abaRelatorios() {
@@ -1470,131 +1426,6 @@
     h += '<p class="nota-peq">Para salvar em PDF, abra o .html baixado e use Imprimir → Salvar como PDF. Se o download não funcionar nesta visualização, use "Copiar texto" ou abra o painel direto pelo arquivo index.html.</p>';
     h += '<section class="painel-card relatorio" aria-label="Prévia do relatório">' + r.html + '</section>';
     return h;
-  }
-
-  /* ---------- Importar ---------- */
-
-  function abaImportar() {
-    var h = '<div class="cabeca-aba"><h1>Importar conversas</h1><p class="sub">Você exporta a conversa no aplicativo e carrega o arquivo aqui. Para WhatsApp, exporte as conversas que tiveram dúvidas, relatos ou depoimentos. Tudo é lido no seu navegador, fica só nesta aba e não se mistura com os dados fictícios.</p></div>';
-    h += '<div class="duas"><section class="painel-card"><h2>Como exportar</h2>' +
-      '<details open><summary><strong>WhatsApp</strong> (conversa individual ou grupo)</summary><ol class="passos"><li>Abra a conversa no celular.</li><li>Toque nos três pontinhos (Android) ou no nome do contato (iPhone).</li><li>Escolha <em>Mais → Exportar conversa → Sem mídia</em>.</li><li>Salve o arquivo .txt (se vier em .zip, extraia o .txt).</li></ol></details>' +
-      '<details><summary><strong>Telegram</strong> (grupo de acompanhamento)</summary><ol class="passos"><li>Use o Telegram Desktop no computador.</li><li>Abra o grupo → três pontinhos → <em>Exportar histórico do chat</em>.</li><li>Desmarque fotos e vídeos e escolha o formato <em>JSON legível por máquina</em>.</li><li>Carregue aqui o arquivo result.json.</li></ol></details>' +
-      '<details><summary><strong>Planilha</strong> (.csv)</summary><p class="sub">Colunas: data, hora, canal, nome, mensagem e equipe (sim/não).</p><button type="button" class="btn btn-sec btn-peq" data-acao="modelo-csv">Baixar modelo de planilha</button></details>' +
-      '</section>';
-    h += '<section class="painel-card"><h2>Carregar arquivo</h2>';
-    if (!pode('editar')) h += semPermissao('importar dados');
-    else {
-      h += '<div class="linha-controles">' +
-        '<label class="campo"><span>Origem</span><select id="imp-origem" data-mudar="imp-origem">' + opcoes({ whatsapp: 'WhatsApp (.txt)', telegram: 'Telegram (.json)', csv: 'Planilha (.csv)' }, S.impOrigem) + '</select></label>' +
-        (S.impOrigem === 'csv' ? '<label class="campo"><span>Canal, se a planilha não informar</span><select id="imp-canal" data-mudar="imp-canal">' + opcoes(CANAIS, S.impCanal) + '</select></label>' : '') +
-        '<label class="campo"><span>Arquivo</span><input type="file" id="imp-arquivo" data-mudar="imp-arquivo" accept=".txt,.json,.csv,text/plain,application/json,text/csv"></label></div>';
-      h += previaImportacao();
-    }
-    h += '</section></div>';
-    var c = S.dados.import;
-    if (c.mensagens.length) {
-      h += '<section class="painel-card"><h2>Dados importados nesta aba</h2><p>' + c.mensagens.length + ' mensagens de ' + Object.keys(c.alunas).length + ' aluna(s), ' + c.mensagens.filter(function (m) { return m.equipe; }).length + ' da equipe.</p>' +
-        '<div class="linha-controles"><button type="button" class="btn" data-acao="modo" data-v="import">Ver no painel</button>' +
-        (pode('editar') ? '<button type="button" class="btn btn-perigo" data-acao="imp-limpar-pedir">Apagar dados importados</button>' : '') + '</div>' +
-        (S.confirmarLimpeza ? '<div class="confirma"><p>Isso apaga da memória desta aba todas as mensagens e fotos importadas. Os arquivos no seu computador continuam intactos.</p><button type="button" class="btn btn-perigo" data-acao="imp-limpar">Sim, apagar</button><button type="button" class="btn btn-sec" data-acao="imp-limpar-cancelar">Cancelar</button></div>' : '') +
-        '</section>';
-    }
-    return h;
-  }
-
-  function previaImportacao() {
-    var p = S.impPrevia;
-    if (!p) return '<p class="sub">Escolha um arquivo para ver uma prévia antes de importar.</p>';
-    if (p.erro) return '<p class="erro">' + esc(p.erro) + '</p>';
-    var rem = {};
-    p.mensagens.forEach(function (m) { rem[m.remetente] = (rem[m.remetente] || 0) + 1; });
-    var nomes = Object.keys(rem).sort(function (a, b) { return rem[b] - rem[a]; });
-    var datas = p.mensagens.map(function (m) { return m.data; });
-    var h = '<div class="previa"><p><strong>' + esc(p.arquivo) + '</strong>: ' + p.mensagens.length + ' mensagens de ' + nomes.length + ' pessoa(s), de ' + U.fmtDataAno(Math.min.apply(null, datas)) + ' a ' + U.fmtDataAno(Math.max.apply(null, datas)) + '.' +
-      (p.midias ? ' ' + p.midias + ' mídia(s) ignorada(s) (fotos entram só pela aba Antes e depois, com autorização).' : '') +
-      (p.ignoradas ? ' ' + p.ignoradas + ' linha(s) de sistema ou apagadas ignorada(s).' : '') + '</p>' +
-      '<fieldset class="secoes"><legend>Marque quem é da equipe (as mensagens da equipe não entram nas contagens e servem para saber o que já foi respondido)</legend>' +
-      nomes.slice(0, 60).map(function (n, i) {
-        return '<label class="check"><input type="checkbox" id="eq-' + i + '" data-mudar="imp-equipe" data-nome="' + esc(n) + '"' + (p.equipe[n] ? ' checked' : '') + '> ' + esc(n) + ' <span class="sub">(' + rem[n] + ')</span></label>';
-      }).join('') + (nomes.length > 60 ? '<p class="sub">Mostrando as 60 pessoas com mais mensagens.</p>' : '') + '</fieldset>' +
-      '<div class="linha-controles"><button type="button" class="btn" data-acao="imp-confirmar">Importar para revisão</button><button type="button" class="btn btn-sec" data-acao="imp-cancelar">Cancelar</button></div>' +
-      '<p class="nota-peq">Depois de importar, tudo recebe classificação automática marcada como sugestão. Revise em "Mensagens e revisão".</p></div>';
-    return h;
-  }
-
-  function lerArquivoImportacao(file) {
-    var ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (ext === 'json') S.impOrigem = 'telegram';
-    else if (ext === 'csv') S.impOrigem = 'csv';
-    else if (ext === 'txt') S.impOrigem = 'whatsapp';
-    else if (ext === 'zip') { S.impPrevia = { erro: 'Arquivos .zip não são lidos. Extraia o .txt de dentro do .zip e carregue só ele.' }; render(); return; }
-    var fr = new FileReader();
-    fr.onload = function () {
-      try {
-        var I = P.importadores;
-        var res = S.impOrigem === 'telegram' ? I.telegram(fr.result) : S.impOrigem === 'csv' ? I.csv(fr.result, S.impCanal) : I.whatsapp(fr.result);
-        var eq = {};
-        res.mensagens.forEach(function (m) { if (m.equipe) eq[m.remetente] = true; if (S.equipe.indexOf(m.remetente) !== -1) eq[m.remetente] = true; });
-        S.impPrevia = { arquivo: file.name, mensagens: res.mensagens, midias: res.midias, ignoradas: res.ignoradas, equipe: eq };
-      } catch (e) {
-        S.impPrevia = { erro: e.message };
-      }
-      render();
-    };
-    fr.onerror = function () { S.impPrevia = { erro: 'Não consegui ler o arquivo.' }; render(); };
-    fr.readAsText(file, 'utf-8');
-  }
-
-  // Código estável por remetente sem guardar o nome ou o número de origem.
-  function chaveRemetente(s) {
-    var h = 5381, t = U.norm(s).trim();
-    for (var i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
-    return 'r' + (h >>> 0).toString(36);
-  }
-
-  // Chave para reconhecer a mesma mensagem em importações repetidas (não guarda o remetente em texto).
-  function chaveMensagem(x) { return x.canal + '|' + Math.floor(x.data / 60000) + '|' + chaveRemetente(x.remetente) + '|' + U.norm(x.texto).slice(0, 200); }
-
-  function confirmarImportacao() {
-    var p = S.impPrevia, c = S.dados.import;
-    c.chaves = c.chaves || {};
-    c.arquivos = c.arquivos || [];
-    var total = p.mensagens.length;
-    p.mensagens = p.mensagens.filter(function (x) { var k = chaveMensagem(x); if (c.chaves[k]) return false; c.chaves[k] = 1; return true; });
-    var repetidas = total - p.mensagens.length;
-    var porChave = {};
-    Object.keys(c.alunas).forEach(function (id) { porChave[c.alunas[id].chave] = id; });
-    var novas = p.mensagens.map(function (x) {
-      var eq = !!p.equipe[x.remetente];
-      var alunaId = null;
-      if (!eq) {
-        var k = chaveRemetente(x.remetente);
-        alunaId = porChave[k];
-        if (!alunaId) {
-          alunaId = 'I-' + String(Object.keys(c.alunas).length + 1).padStart(3, '0');
-          var ehTel = /^[+\d\s().-]{8,}$/.test(x.remetente);
-          var partes = ehTel ? [] : x.remetente.trim().split(/\s+/);
-          // Guardamos só o primeiro nome (para a equipe reconhecer) e o sobrenome em memória para mascarar textos.
-          c.alunas[alunaId] = { id: alunaId, chave: k, nome: ehTel ? 'Sem nome' : partes[0], sobrenome: ehTel ? '' : partes.slice(1).join(' ') };
-          porChave[k] = alunaId;
-        }
-      }
-      var auto = C.classificar(x.texto, S.temas);
-      return { id: 'i' + (++S.seqImport), origem: 'import', arquivo: p.arquivo, conversa: x.canal + ':' + p.arquivo, canal: x.canal, data: x.data, texto: x.texto, equipe: eq, autor: eq ? x.remetente : null,
-        alunaId: alunaId, tipo: eq ? 'outro' : auto.tipo, tema: auto.tema, auto: auto, revisado: eq, aut: null, resposta: null, respondeA: null, idOrigem: x.idOrigem, respondeOrigem: x.respondeOrigem };
-    });
-    ligarRespostas(novas);
-    c.mensagens = c.mensagens.concat(novas).sort(function (a, b) { return a.data - b.data; });
-    c.arquivos.push({ nome: p.arquivo, canal: (novas[0] || {}).canal || '', novas: novas.length, repetidas: repetidas, quando: Date.now() });
-    S.calculadoEm = Date.now();
-    registrar('Importou arquivo', p.arquivo + ' · ' + novas.length + ' novas, ' + repetidas + ' repetidas ignoradas');
-    S.impPrevia = null;
-    S.modo = 'import';
-    S.filtros.periodo = 'tudo';
-    invalidarMascaras();
-    S.aba = 'visao';
-    avisar(novas.length + ' mensagens novas importadas' + (repetidas ? ', ' + repetidas + ' repetidas ignoradas' : '') + '. Revise as classificações automáticas.');
-    render();
   }
 
   // Liga cada pergunta à resposta da equipe.
@@ -1654,17 +1485,17 @@
       return m;
     });
     ligarRespostas(novas);
-    var antigo = S.dados.nuvem;
+    var antigo = S.dados;
     return { alunas: alunas, mensagens: novas, midias: antigo.midias, prints: antigo.prints, grupos: Object.keys(grupos) };
   }
 
   function carregarNuvem(silencioso) {
     if (!S.usuario || S.nuvem.carregando) return Promise.resolve();
     S.nuvem.carregando = true; S.nuvem.erro = '';
-    if (!silencioso && S.modo === 'nuvem') render();
+    if (!silencioso) render();
     return P.nuvem.mensagens(60).then(function (r) {
       var d = montarNuvem(r || {});
-      S.dados.nuvem = d;
+      S.dados = d;
       S.nuvem.grupos = d.grupos;
       S.nuvem.buscadoEm = Date.now();
       S.calculadoEm = Date.now();
@@ -1673,7 +1504,7 @@
       if (!silencioso) avisar(S.nuvem.erro);
     }).then(function () {
       S.nuvem.carregando = false;
-      if (S.modo === 'nuvem' && !(silencioso && S.modalAtivo)) render();
+      if (!(silencioso && S.modalAtivo)) render();
       else renderMoldura();
     });
   }
@@ -1682,7 +1513,7 @@
 
   function abaConfig() {
     var adm = pode('admin');
-    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, objeções, equipe, permissões e registro de ações. ' + (S.usuario ? 'Por enquanto, mudanças em assuntos, objeções e equipe valem só nesta aba e voltam ao padrão ao recarregar.' : 'Neste protótipo tudo fica só nesta aba.') + '</p></div>';
+    var h = '<div class="cabeca-aba"><h1>Configurações</h1><p class="sub">Assuntos, objeções, equipe, permissões e registro de ações. ' + 'Por enquanto, mudanças em assuntos, objeções e equipe valem só nesta aba e voltam ao padrão ao recarregar.' + '</p></div>';
     h += '<section class="painel-card"><h2>Assuntos</h2><p class="sub">As palavras-chave alimentam a classificação automática. O "tipo" decide se o assunto vira pauta de conteúdo, bloqueio de mentalidade, ajuste na entrega ou prova social. Mensagens já revisadas não são alteradas.</p>';
     if (!adm) h += semPermissao('editar assuntos');
     h += '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Assunto</th><th>Tipo</th><th>Palavras-chave (separe por vírgula)</th><th>Ideia de conteúdo</th><th>Ângulo do seu método (ou ação, se for entrega)</th>' + (adm ? '<th><span class="sr">Ações</span></th>' : '') + '</tr></thead><tbody>' +
@@ -1712,18 +1543,18 @@
     if (adm) h += '<div class="linha-controles"><label class="campo campo-largo"><span>Nova objeção</span><input type="text" id="obj-nova" placeholder="Ex.: Depois dos 40 não dá mais"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="obj-adicionar">Adicionar</button></div></div>';
     h += '</section>';
 
-    h += '<div class="duas"><section class="painel-card"><h2>Equipe</h2><p class="sub">Nomes usados em "quem confirmou a autorização". Ao importar, marque essas pessoas como equipe.</p><ul class="equipe">' +
+    h += '<div class="duas"><section class="painel-card"><h2>Equipe</h2><p class="sub">Nomes usados em "quem confirmou a autorização". No grupo do Telegram, quem é administrador conta como equipe.</p><ul class="equipe">' +
       S.equipe.map(function (n, i) { return '<li>' + esc(n) + (adm && S.equipe.length > 1 ? ' <button type="button" class="link" data-acao="equipe-remover" data-i="' + i + '">remover</button>' : '') + '</li>'; }).join('') + '</ul>' +
       (adm ? '<div class="linha-controles"><label class="campo"><span>Nome</span><input type="text" id="equipe-novo"></label><div class="campo campo-botao"><button type="button" class="btn btn-sec" data-acao="equipe-adicionar">Adicionar</button></div></div>' : semPermissao('editar a equipe')) +
       '</section>';
-    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">' + (S.usuario ? 'A função de cada pessoa é definida em Usuários. O primeiro nome só sai do servidor para Administração e Edição.' : 'Simulação. Na versão com servidor, isso é garantido pelo login e pelas regras do banco de dados.') + ' O painel não guarda telefone nem contato de ninguém.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver primeiro nome</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
+    h += '<section class="painel-card"><h2>Permissões por função</h2><p class="sub">' + 'A função de cada pessoa é definida em Usuários. O primeiro nome só sai do servidor para Administração e Edição. O painel não guarda telefone nem contato de ninguém.</p><div class="tabela-rolagem"><table class="tab tab-centro"><thead><tr><th>Função</th><th>Ver painéis</th><th>Editar</th><th>Ver primeiro nome</th><th>Exportar</th><th>Administrar</th></tr></thead><tbody>' +
       Object.keys(PAPEIS).map(function (k) {
         var p = PAPEIS[k];
         function c(v) { return v ? '<span class="sim">Sim</span>' : '<span class="nao">Não</span>'; }
         return '<tr' + (k === S.papel ? ' class="atual"' : '') + '><th>' + esc(p.nome) + '</th><td>' + c(true) + '</td><td>' + c(p.editar) + '</td><td>' + c(p.nome1) + '</td><td>' + c(p.exportar) + '</td><td>' + c(p.admin) + '</td></tr>';
       }).join('') + '</tbody></table></div></section></div>';
 
-    if (S.usuario && adm) {
+    if (adm) {
       var R = S.registroServidor;
       h += '<section class="painel-card"><h2>Registro do servidor</h2><p class="sub">Revisões, autorizações, convites e mudanças de usuários, com quem fez. Fica guardado no servidor.</p>' +
         (!R ? '<button type="button" class="btn btn-sec" data-acao="registro-servidor">Ver registro</button>' : R.carregando ? '<p class="sub">Carregando…</p>' : R.erro ? '<p class="erro">' + esc(R.erro) + '</p>' :
@@ -1731,9 +1562,9 @@
             R.lista.map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(Date.parse(a.quando)) + '</td><td>' + esc(a.usuario || 'sistema') + '</td><td>' + esc(a.tipo) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
             '<button type="button" class="btn btn-sec btn-peq" data-acao="registro-servidor">Atualizar</button>' : '<p class="sub">Nada registrado ainda.</p>') + '</section>';
     }
-    h += '<section class="painel-card"><h2>Registro de ações' + (S.usuario ? ' nesta aba' : '') + '</h2><p class="sub">Classificações, autorizações, cópias tratadas, importações e exportações. ' + (S.usuario ? 'Some ao recarregar. O que vai para o servidor aparece no registro acima.' : 'Neste protótipo some ao recarregar. Na versão real fica guardado no servidor.') + '</p>' +
-      (!adm ? semPermissao('ver o registro de ações') : S.auditoria.length ? '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Quando</th><th>Função</th><th>Dados</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>' +
-        S.auditoria.slice(0, 200).map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(a.quando) + '</td><td>' + esc(a.papel) + '</td><td>' + esc(a.modo) + '</td><td>' + esc(a.acao) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">Nenhuma ação registrada ainda.</p>') +
+    h += '<section class="painel-card"><h2>Registro de ações nesta aba</h2><p class="sub">Classificações, autorizações, cópias tratadas e exportações. Some ao recarregar. O que vai para o servidor aparece no registro acima.</p>' +
+      (!adm ? semPermissao('ver o registro de ações') : S.auditoria.length ? '<div class="tabela-rolagem"><table class="tab"><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>' +
+        S.auditoria.slice(0, 200).map(function (a) { return '<tr><td class="mono">' + U.fmtDataHora(a.quando) + '</td><td>' + esc(a.papel) + '</td><td>' + esc(a.acao) + '</td><td>' + esc(a.detalhe) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">Nenhuma ação registrada ainda.</p>') +
       '</section>';
     return h;
   }
@@ -1817,7 +1648,6 @@
 
   function abaUsuarios() {
     var h = '<div class="cabeca-aba"><h1>Usuários</h1><p class="sub">Quem entra no painel, com qual função e quais painéis vê. Cada pessoa entra com a senha inicial (primeiro nome + 1234) e, no primeiro acesso, cria uma senha só dela. Depois disso, ninguém da equipe sabe a senha de outra pessoa.</p></div>';
-    if (!S.usuario) return h + vazio('Disponível no painel online', 'Neste protótipo sem login, use "Ver como" no topo para simular as funções. No painel publicado, a Administração cadastra as pessoas aqui.');
     var U2 = S.usu, dis = U2.ocupado ? ' disabled' : '';
     if (U2.acesso) {
       h += '<section class="painel-card card-destaque" role="alert"><h2>Acesso pronto</h2><p>Passe para <strong>' + esc(U2.acesso.email) + '</strong> (por exemplo, pelo WhatsApp):</p>' +
@@ -1910,7 +1740,6 @@
       render(); renderPersonalizar(); avisar('Painel redefinido. Visualizações salvas continuam disponíveis.');
     },
     atualizar: function () { renderAtualizar(); },
-    'ir-importar': function () { fecharModal(); irPara('importar'); },
     recalcular: function () {
       if (!pode('editar')) return;
       var n = 0;
@@ -1926,14 +1755,8 @@
       else irPara(v);
     },
     'ver-todos-assuntos': function () { S.verTodosAssuntos = !S.verTodosAssuntos; render(); },
-    modo: function (b) {
-      if (S.modo === b.dataset.v) { render(); return; }
-      S.modo = b.dataset.v; S.limite = 40; S.filtros.periodo = S.modo === 'import' ? 'tudo' : '30'; S.diaResumo = ''; render();
-      if (S.modo === 'nuvem' && Date.now() - S.nuvem.buscadoEm > 60000) carregarNuvem();
-    },
     sair: function () { P.nuvem.sair(); },
     'nuvem-recarregar': function () {
-      if (S.modo !== 'nuvem') S.modo = 'nuvem';
       var modal = S.modalAtivo === 'atualizar';
       carregarNuvem().then(function () { if (modal) renderAtualizar(); if (!S.nuvem.erro) avisar('Mensagens atualizadas.'); });
     },
@@ -2069,7 +1892,7 @@
       var c = conj();
       var fonte = K.fonte === 'msg' ? acharMsg(K.id) : acharFoto(K.id);
       var tipo = K.fonte === 'msg' ? 'depoimento' : fonte.tipo;
-      c.prints.push({ id: 'p' + (c.prints.length + 1) + (S.modo === 'demo' ? '' : 'i'), fonte: K.fonte, fonteId: K.id, alunaId: fonte.alunaId, tipo: tipo, formato: K.formato, url: K.previa, status: 'aguardando', criadoEm: Date.now(), nota: '' });
+      c.prints.push({ id: 'p' + (c.prints.length + 1) + '', fonte: K.fonte, fonteId: K.id, alunaId: fonte.alunaId, tipo: tipo, formato: K.formato, url: K.previa, status: 'aguardando', criadoEm: Date.now(), nota: '' });
       S.assinatura = K.assinatura;
       registrar('Criou print para aprovação', TIPOS_PRINT[tipo] + ' · ' + P.prints.FORMATOS[K.formato].nome);
       S.compositor = null;
@@ -2087,7 +1910,6 @@
       if (!pode('admin')) return;
       var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
       if (!printValido(p)) return;
-      // Sem login real, registramos a função simulada. Com login, aqui entra o e-mail de quem aprovou.
       p.status = 'aprovado'; p.aprovadoPor = quemSou(); p.aprovadoEm = Date.now(); p.nota = '';
       registrar('Aprovou print', p.id + ' · ' + TIPOS_PRINT[p.tipo]);
       avisar('Print aprovado.');
@@ -2106,7 +1928,7 @@
       var p = conj().prints.find(function (x) { return x.id === b.dataset.id; });
       if (!printValido(p) || p.status !== 'aprovado') return;
       registrar('Baixou print', p.id);
-      U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + nomeArquivoPrint(p), blobDeDataURL(p.url));
+      U.baixar(nomeArquivoPrint(p), blobDeDataURL(p.url));
     },
     'print-descartar': function (b) {
       if (!pode('editar')) return;
@@ -2124,9 +1946,9 @@
       if (!fa) { avisar('Escolha pelo menos a foto de antes (ou o print da conversa).'); return; }
       function ler(file) { return new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.readAsDataURL(file); }); }
       Promise.all([ler(fa), fd ? ler(fd) : Promise.resolve(null)]).then(function (r) {
-        var c = S.dados.import;
-        var id = 'if' + (c.midias.length + 1);
-        c.midias.push({ id: id, origem: 'import', tipo: r[1] ? 'antes_depois' : 'print_conversa', alunaId: document.getElementById('foto-aluna').value,
+        var c = conj();
+        var id = 'f' + (c.midias.length + 1);
+        c.midias.push({ id: id, origem: 'manual', tipo: r[1] ? 'antes_depois' : 'print_conversa', alunaId: document.getElementById('foto-aluna').value,
           descricao: document.getElementById('foto-desc').value || fa.name, data: Date.now(), fotos: { antes: r[0], depois: r[1] },
           tratadas: { antes: null, depois: null }, tratadaInfo: {}, ocultarRosto: true, aut: { status: 'nao_solicitada', confirmadoPor: '', data: null } });
         registrar('Adicionou ' + (r[1] ? 'antes e depois' : 'print de conversa'), id + ' (só na memória da aba)');
@@ -2136,16 +1958,16 @@
     'rel-html': function () {
       if (!pode('exportar')) return;
       var r = construirRelatorio();
-      var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Relatório</title><style>body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#1f1a1d}h2,h3{line-height:1.2}h3{margin-top:1.8rem;color:#8a1d4d}table{border-collapse:collapse;width:100%;margin:.5rem 0 1rem}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.rel-demo{background:#fff1c2;border:2px dashed #8a6500;padding:.5rem;font-weight:700;text-align:center}.rel-meta,.rel-lista span{color:#5b5157;font-size:.9em}.pauta>li{margin-bottom:1rem}.pauta-campos div{display:grid;grid-template-columns:11rem 1fr;gap:.6rem}.pauta-campos dt{color:#6c5f66;font-size:.85em}.pauta-campos dd{margin:0}.objecao{border-left:2px solid #a3245c;padding-left:.8rem;margin:.8rem 0}.objecao p{margin:.2rem 0}.objecao-nome{font-weight:700}.rel-lista li{margin-bottom:.5rem}</style></head><body>' + r.html + '</body></html>';
+      var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Relatório</title><style>body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#1f1a1d}h2,h3{line-height:1.2}h3{margin-top:1.8rem;color:#8a1d4d}table{border-collapse:collapse;width:100%;margin:.5rem 0 1rem}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.rel-meta,.rel-lista span{color:#5b5157;font-size:.9em}.pauta>li{margin-bottom:1rem}.pauta-campos div{display:grid;grid-template-columns:11rem 1fr;gap:.6rem}.pauta-campos dt{color:#6c5f66;font-size:.85em}.pauta-campos dd{margin:0}.objecao{border-left:2px solid #a3245c;padding-left:.8rem;margin:.8rem 0}.objecao p{margin:.2rem 0}.objecao-nome{font-weight:700}.rel-lista li{margin-bottom:.5rem}</style></head><body>' + r.html + '</body></html>';
       registrar('Exportou relatório (.html)', S.rel.tipo);
-      U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'relatorio-' + U.chaveDia(Date.now()) + '.html', doc, 'text/html');
+      U.baixar('relatorio-' + U.chaveDia(Date.now()) + '.html', doc, 'text/html');
       render();
     },
     'rel-csv': function () {
       if (!pode('exportar')) return;
       var r = construirRelatorio();
       registrar('Exportou planilha (.csv)', S.rel.tipo);
-      U.baixar((S.modo === 'demo' ? 'FICTICIO-' : '') + 'relatorio-' + U.chaveDia(Date.now()) + '.csv', csvTexto(r.csv), 'text/csv');
+      U.baixar('relatorio-' + U.chaveDia(Date.now()) + '.csv', csvTexto(r.csv), 'text/csv');
       render();
     },
     'rel-copiar': function () {
@@ -2156,21 +1978,9 @@
     'resumo-copiar': function () {
       var dia = S.diaResumo ? U.deChave(S.diaResumo) : U.inicioDia(refFim());
       var r = calcularResumo(dia);
-      var txt = (S.modo === 'demo' ? '*** DADOS FICTÍCIOS ***\n' : '') + 'Resumo do dia ' + U.fmtDataAno(dia) + '\n\n' + r.destaques.map(function (d) { return '• ' + textoPlano(d); }).join('\n') +
+      var txt = 'Resumo do dia ' + U.fmtDataAno(dia) + '\n\n' + r.destaques.map(function (d) { return '• ' + textoPlano(d); }).join('\n') +
         (r.atencao.length ? '\n\nPede atenção:\n' + r.atencao.map(function (d) { return '• ' + textoPlano(d); }).join('\n') : '');
       U.copiar(txt, function () { registrar('Copiou resumo do dia', U.fmtDataAno(dia)); avisar('Resumo copiado.'); }, function () { avisar('Não foi possível copiar automaticamente neste navegador.'); });
-    },
-    'modelo-csv': function () { U.baixar('modelo-importacao.csv', P.importadores.MODELO_CSV, 'text/csv'); },
-    'imp-confirmar': function () { confirmarImportacao(); },
-    'imp-cancelar': function () { S.impPrevia = null; render(); },
-    'imp-limpar-pedir': function () { S.confirmarLimpeza = true; render(); },
-    'imp-limpar-cancelar': function () { S.confirmarLimpeza = false; render(); },
-    'imp-limpar': function () {
-      S.dados.import = { alunas: {}, mensagens: [], midias: [], prints: [], chaves: {}, arquivos: [] };
-      S.confirmarLimpeza = false;
-      registrar('Apagou dados importados', 'Memória da aba');
-      avisar('Dados importados apagados desta aba.');
-      render();
     },
     'tema-salvar': function (b) {
       if (!pode('admin')) return;
@@ -2190,7 +2000,7 @@
       var id = b.dataset.id;
       var t = S.temas.find(function (x) { return x.id === id; });
       S.temas = S.temas.filter(function (x) { return x.id !== id; });
-      ['demo', 'import', 'nuvem'].forEach(function (k) { var c = S.dados[k]; if (c) c.mensagens.forEach(function (m) { if (m.tema === id) { m.tema = 'outros'; m.revisado = false; } }); });
+      conj().mensagens.forEach(function (m) { if (m.tema === id) { m.tema = 'outros'; m.revisado = false; } });
       if (S.filtros.tema === id) S.filtros.tema = '';
       registrar('Removeu assunto', t.nome + ' (mensagens foram para "Outros assuntos" e voltaram para revisão)');
       render();
@@ -2261,16 +2071,11 @@
 
   var MUDANCAS = {
     filtro: function (el) { S.filtros[el.dataset.k] = el.value; S.limite = 40; render(); },
-    papel: function (el) { if (S.usuario) return; S.papel = el.value; registrar('Trocou função (simulação)', PAPEIS[S.papel].nome); render(); },
     'so-nao-rev': function (el) { S.soNaoRevisadas = el.checked; S.limite = 40; renderListaMensagens(); },
     'dia-resumo': function (el) { S.diaResumo = el.value; render(); },
     'rel-tipo': function (el) { S.rel.tipo = el.value; render(); },
     'rel-rev': function (el) { S.rel.soRevisadas = el.checked; render(); },
     'rel-secao': function (el) { S.rel.secoes[el.dataset.k] = el.checked; render(); },
-    'imp-origem': function (el) { S.impOrigem = el.value; S.impPrevia = null; render(); },
-    'imp-canal': function (el) { S.impCanal = el.value; },
-    'imp-arquivo': function (el) { if (el.files[0]) lerArquivoImportacao(el.files[0]); },
-    'imp-equipe': function (el) { S.impPrevia.equipe[el.dataset.nome] = el.checked; },
     'ocultar-rosto': function (el) { if (!pode('editar')) return; var f = acharFoto(el.dataset.id); f.ocultarRosto = el.checked; registrar('Alterou exigência de rosto oculto', 'Foto ' + f.id + ': ' + (el.checked ? 'sim' : 'não')); render(); },
     'ed-bloco': function (el) { S.editor.bloco = +el.value; S.editor.previa = null; renderEditor(); },
     cp: function (el) {
@@ -2341,37 +2146,24 @@
     var h = location.hash.slice(1);
     if (h !== S.aba && ABAS.some(function (a) { return a.id === h; })) irPara(h);
   });
-  S.dados.demo = P.demo.gerar(S.temas, S.equipe);
-
-  // Prints de exemplo (fictícios): um aguardando aprovação e um aprovado, feitos com as cópias de rosto oculto.
-  (function () {
-    var d = S.dados.demo, PR = P.prints;
-    var fontes = d.midias.filter(function (f) { return autValida(f.aut) && f.tratadas.antes && f.tratadas.depois; });
-    var depo = d.mensagens.find(function (m) { return m.tipo === 'depoimento' && prontoDivulgacao(m); });
-    if (depo) d.prints.push({ id: 'p1', fonte: 'msg', fonteId: depo.id, alunaId: depo.alunaId, tipo: 'depoimento', formato: 'feed', url: PR.cardDepoimento({ formato: 'feed', texto: PRIV.mascararTexto(depo.texto, d.alunas), atribuicao: 'Aluna do programa', fundo: 'rosa' }), status: 'aguardando', criadoEm: Date.now() - 3600000, nota: '' });
-    Promise.all(fontes.map(function (f) { return Promise.all([PR.carregar(f.tratadas.antes), PR.carregar(f.tratadas.depois)]); })).then(function (pares) {
-      pares.forEach(function (im, i) {
-        var f = fontes[i];
-        d.prints.push({ id: 'p' + (d.prints.length + 1), fonte: 'midia', fonteId: f.id, alunaId: f.alunaId, tipo: 'antes_depois', formato: i ? 'stories' : 'feed',
-          url: PR.antesDepois({ formato: i ? 'stories' : 'feed', layout: i ? 'empilhado' : 'lado', antes: im[0], depois: im[1], rotulos: true, periodo: f.descricao, fundo: 'claro' }),
-          status: i ? 'aprovado' : 'aguardando', criadoEm: Date.now() - (i + 2) * 3600000, aprovadoPor: i ? 'Administração (login simulado)' : null, aprovadoEm: i ? Date.now() - 1800000 : null, nota: '' });
-      });
-      render();
-    });
-  })();
   var abaInicial = location.hash.slice(1);
   if (ABAS.some(function (a) { return a.id === abaInicial; })) S.aba = abaInicial;
   if (P.nuvem && P.nuvem.configurado) {
     // Painel publicado: só mostra algo depois do login. A função vem do servidor.
     P.nuvem.iniciar(function (eu) {
-      S.usuario = eu; S.papel = eu.funcao; S.modo = 'nuvem'; S.filtros.periodo = '30';
+      S.usuario = eu; S.papel = eu.funcao; S.filtros.periodo = '30';
       registrar('Entrou no painel', eu.email);
       render();
       carregarNuvem();
       if (S.aba === 'usuarios') carregarUsuarios();
       setInterval(function () {
-        if (document.visibilityState === 'visible' && S.modo === 'nuvem' && (S.aba === 'visao' || S.aba === 'dia') && !S.modalAtivo) carregarNuvem(true);
+        if (document.visibilityState === 'visible' && (S.aba === 'visao' || S.aba === 'dia') && !S.modalAtivo) carregarNuvem(true);
       }, 300000);
     }).catch(function (e) { document.getElementById('entrada').textContent = 'Não consegui iniciar o login: ' + P.nuvem.traduzir(e); });
-  } else render();
+  } else {
+    document.body.classList.add('sem-login');
+    var ent = document.getElementById('entrada');
+    ent.hidden = false;
+    ent.innerHTML = '<div class="entrada-caixa"><p class="entrada-marca">Corpo Feliz</p><h1>Acompanhamento das Alunas</h1><p>O painel não encontrou a configuração do servidor (assets/js/config.js). Ela é criada na publicação pelo Vercel.</p></div>';
+  }
 })(window.Painel);

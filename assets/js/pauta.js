@@ -183,7 +183,7 @@ window.Painel = window.Painel || {};
         t.push('- "' + x.texto + '": ' + x.media.toFixed(1).replace('.', ',') + ' respostas em média (' + x.vezes + 'x)');
         return '<li>' + citar(x.texto) + ' <span>(' + x.media.toFixed(1).replace('.', ',') + ' respostas em média' + (x.vezes > 1 ? ', enviada ' + x.vezes + 'x' : '') + ')</span></li>';
       }).join('') + '</ol>');
-    } else { h.push('<p>Sem mensagens da equipe no Telegram neste período. Ao importar, marque quem é da equipe.</p>'); t.push('Sem dados.'); }
+    } else { h.push('<p>Sem mensagens da equipe no Telegram neste período. Quem é administrador do grupo conta como equipe.</p>'); t.push('Sem dados.'); }
     fimSecao();
 
     // ---- 6. Perguntas que mais se repetem

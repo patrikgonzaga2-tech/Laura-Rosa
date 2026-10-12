@@ -91,8 +91,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .marca-titulo { font-family: var(--f-display); font-weight: 700; font-size: 1.12rem; color: var(--accent-ink); }
 .marca-sub { font-size: 0.8rem; color: var(--muted); }
 .topo-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
-.papel { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
-.papel select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface-2); }
 .seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 0.86rem; font-weight: 600; color: var(--muted); }
@@ -105,13 +103,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Faixa de aviso: sempre visível, deixa claro o tipo de dado */
 .faixa { padding: 8px 20px; font-size: 0.88rem; border-bottom: 1px solid var(--line); }
-.faixa-demo {
-  background: repeating-linear-gradient(-45deg, var(--demo-bg) 0 14px, transparent 14px 28px), var(--demo-bg);
-  color: var(--demo-ink); border-bottom: 2px dashed var(--demo-line);
-}
-.faixa-import { background: var(--imp-bg); color: var(--imp-ink); }
 .faixa-nuvem { background: var(--vivo-bg); color: var(--vivo-ink); }
-.faixa-sim { opacity: 0.85; }
 
 /* Casca */
 .casca { display: grid; grid-template-columns: var(--nav-w) minmax(0, 1fr); min-height: 70vh; }
@@ -375,7 +367,6 @@ blockquote.depo { margin: 0; padding-left: 12px; border-left: 2px solid var(--ac
 .secoes legend { font-size: 0.82rem; color: var(--muted); font-weight: 600; padding: 0 4px; }
 .relatorio { gap: 10px; max-width: 52rem; }
 .relatorio h3 { margin-top: 8px; }
-.rel-demo { background: var(--demo-bg); color: var(--demo-ink); border: 2px dashed var(--demo-line); padding: 8px; text-align: center; font-weight: 700; border-radius: 6px; }
 .rel-meta { color: var(--muted); font-size: 0.86rem; }
 .rel-tab { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 .rel-tab th, .rel-tab td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
