@@ -10,7 +10,8 @@
 // em painel_eventos, para ajustar a leitura.
 //
 // Respostas da equipe: a UMCLIQUE só reenvia as mensagens RECEBIDAS. Das enviadas pelo celular
-// do suporte chega só o aviso de entrega (messages_update, IsFromMe). Nesse caso buscamos o texto
+// do suporte chega só o aviso de entrega/leitura (messages_update) com os códigos das mensagens.
+// Se algum código ainda não está no painel, é uma mensagem enviada pelo suporte: buscamos o texto
 // no provedor do número (uazapi, POST {BaseUrl}/message/find) com a chave do canal que vem no
 // próprio aviso. A chave é usada só nesta requisição e nunca é gravada; só aceitamos *.uazapi.com.
 
@@ -131,22 +132,24 @@ async function gravar(ev: any): Promise<boolean> {
   return true;
 }
 
-// Aviso de que o número de suporte enviou mensagens: busca o texto delas no provedor.
+// Aviso de entrega/leitura: se cita mensagens que ainda não temos, são mensagens enviadas pelo
+// suporte (as recebidas já chegaram pelo webhook). Busca o texto delas no provedor.
+// Obs.: o aviso de leitura de uma mensagem enviada vem com IsFromMe = false (quem leu foi a aluna).
 async function buscarEnviadas(b: any): Promise<number> {
   const e = b?.event ?? {};
-  if (e.IsFromMe !== true || e.IsGroup === true) return 0;
+  if (e.IsGroup === true) return 0;
   const ids: string[] = (Array.isArray(e.MessageIDs) ? e.MessageIDs : []).map((x: any) => String(x));
   const chat = primeiro(e.chatid, e.Chat);
   if (!ids.length || !chat || String(chat).endsWith("@g.us")) return 0;
+  const conversa = await pseudonimo(soDigitos(chat));
+  const { data: ja } = await db.from("painel_mensagens").select("mensagem_id").eq("origem", "whatsapp").eq("chat_id", conversa).in("mensagem_id", ids);
+  const faltam = ids.filter((id) => !(ja ?? []).some((r: any) => r.mensagem_id === id));
+  if (!faltam.length) return 0;
   const base = String(b?.BaseUrl ?? "");
   const token = String(b?.token ?? "");
   let host = "";
   try { const u = new URL(base); host = u.protocol === "https:" ? u.hostname : ""; } catch { /* inválida */ }
   if (!token || !/(^|\.)uazapi\.com$/.test(host)) { await evento("wa_busca", `Endereço do provedor não aceito para buscar respostas: ${host || "(vazio)"}${token ? "" : ", sem chave"}`); return 0; }
-  const conversa = await pseudonimo(soDigitos(chat));
-  const { data: ja } = await db.from("painel_mensagens").select("mensagem_id").eq("origem", "whatsapp").eq("chat_id", conversa).in("mensagem_id", ids);
-  const faltam = ids.filter((id) => !(ja ?? []).some((r: any) => r.mensagem_id === id));
-  if (!faltam.length) return 0;
   const r = await fetch(base.replace(/\/+$/, "") + "/message/find", {
     method: "POST",
     headers: { "content-type": "application/json", token },
@@ -161,7 +164,7 @@ async function buscarEnviadas(b: any): Promise<number> {
     const ev = lerEvento({ message: { ...m, chatid: primeiro(m.chatid, chat), messageid: id, fromMe: true } });
     if (ev && await gravar(ev)) n++;
   }
-  if (!n) await evento("wa_busca", `Busca de ${faltam.length} mensagem(ns) enviada(s) sem resultado (HTTP ${r.status}). Campos: ` + formato(corpo).slice(0, 40).join(", "));
+  if (!n && e.IsFromMe !== true) await evento("wa_busca", `Busca de ${faltam.length} mensagem(ns) enviada(s) sem resultado (HTTP ${r.status}). Campos: ` + formato(corpo).slice(0, 40).join(", "));
   return n;
 }
 
