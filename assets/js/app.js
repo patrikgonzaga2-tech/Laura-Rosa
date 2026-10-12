@@ -386,12 +386,12 @@
 
     var ultima = 0;
     conj().mensagens.forEach(function (m) { if (m.data > ultima) ultima = m.data; });
-    document.getElementById('status-dados').textContent = (S.nuvem.carregando ? 'Buscando mensagens…' : 'Telegram ao vivo') +
+    document.getElementById('status-dados').textContent = (S.nuvem.carregando ? 'Buscando mensagens…' : 'Ao vivo') +
       (ultima ? ' · mensagens até ' + U.fmtDataHora(ultima) : ' · sem mensagens') + ' · análises às ' + U.fmtHora(S.calculadoEm);
 
     var faixa = document.getElementById('faixa');
     faixa.className = 'faixa faixa-nuvem';
-    faixa.innerHTML = '<strong>Dados reais do grupo do Telegram.</strong> Revisões e autorizações ficam salvas no servidor. Fotos e prints montados aqui ainda ficam só nesta aba.';
+    faixa.innerHTML = '<strong>Dados reais do grupo do Telegram e do WhatsApp de suporte.</strong> Revisões e autorizações ficam salvas no servidor. Fotos e prints montados aqui ainda ficam só nesta aba.';
 
     var aguardando = (conj().prints || []).filter(function (x) { return x.status === 'aguardando'; }).length;
     var grupos = [];
@@ -1276,9 +1276,9 @@
       '<div><dt>Mensagens até</dt><dd>' + (ultima ? U.fmtDataHora(ultima) : 'sem mensagens') + '</dd></div>' +
       '<div><dt>Análises calculadas às</dt><dd>' + U.fmtDataHora(S.calculadoEm) + '</dd></div></dl>';
     h += '<h3>O que você pode fazer</h3><ul class="acoes-explicadas">' +
-      '<li><button type="button" class="btn btn-peq" data-acao="nuvem-recarregar">Buscar mensagens novas</button><span class="sub">Traz do servidor tudo o que chegou do grupo do Telegram nos últimos 60 dias. O painel também busca sozinho a cada 5 minutos enquanto você está na Visão geral ou em Conversas do dia.</span></li>' +
+      '<li><button type="button" class="btn btn-peq" data-acao="nuvem-recarregar">Buscar mensagens novas</button><span class="sub">Traz do servidor tudo o que chegou do Telegram e do WhatsApp de suporte nos últimos 60 dias. O painel também busca sozinho a cada 5 minutos enquanto você está na Visão geral ou em Conversas do dia.</span></li>' +
       '<li><button type="button" class="btn btn-sec btn-peq" data-acao="recalcular"' + (pode('editar') ? '' : ' disabled') + '>Recalcular análises</button><span class="sub">Refaz a classificação automática das mensagens não revisadas com as palavras-chave atuais e recalcula todos os números. As revisadas não mudam.' + (pode('editar') ? '' : ' Precisa da função Edição ou Administração.') + '</span></li></ul>' +
-      '<p class="nota-peq">O WhatsApp de suporte ainda não está ligado ao painel.</p></div>';
+      '<p class="nota-peq">O WhatsApp de suporte chega pelo canal "Suporte alunas" da UMCLIQUE. Mensagens antigas, de antes da ligação, não entram.</p></div>';
     abrirModal(h);
     S.modalAtivo = 'atualizar';
   }
@@ -1444,7 +1444,7 @@
       var limite = m.data + (m.canal === 'whatsapp' ? 24 : 1) * 3600000;
       for (var k = i + 1; k < ordenadas.length && ordenadas[k].data <= limite; k++) {
         var e = ordenadas[k];
-        if (e.equipe && (e.respondeOrigem == null || e.respondeA === m.id)) {
+        if (e.equipe && e.conversa === m.conversa && (e.respondeOrigem == null || e.respondeA === m.id)) {
           m.resposta = e.id; m.respostaEstimada = e.respondeA !== m.id;
           if (!e.respondeA) e.respondeA = m.id;
           break;
