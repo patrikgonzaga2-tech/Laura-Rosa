@@ -7,13 +7,13 @@ Vamos preencher um item por vez. ✅ = já respondido.
 - [ ] Revisar a lista de assuntos e as palavras-chave
 - [x] ✅ Objetivo do painel: organizar e gerar ideias, não responder (então não guardamos contato)
 - [ ] Revisar as objeções e o "como quebrar" de cada uma (Configurações)
-- [ ] Nomes e funções da equipe (quem edita, quem exporta, quem administra)
+- [x] ✅ Login no ar (painel.teamcorpofeliz.com.br); Laura e Patrick como Administração. Novas pessoas pela aba Usuários
+- [ ] Encerrar sessões abertas quando alguém volta para a senha inicial (precisa de confirmação no Supabase)
 - [ ] Quem pode confirmar autorizações de imagem e depoimento
 
 ## WhatsApp
-- [x] ✅ Atendimento pelo app do WhatsApp no celular → começar com exportação manual
-- [ ] Mais ou menos quantas conversas por semana (decide se vale automatizar no futuro)
-- [ ] As alunas mandam muito áudio? (áudios não entram na análise)
+- [x] ✅ WhatsApp de suporte (+55 82 8142-3528) ligado pela UMCLIQUE: perguntas e respostas da equipe chegam sozinhas (12/10/2026)
+- [ ] As alunas mandam muito áudio? (áudios entram só como "[áudio sem legenda]", sem transcrição)
 
 ## Telegram
 - [x] ✅ Bot @CorpoFelizPainelBot criado, privacidade desligada, token nos Secrets do Supabase (11/10/2026)
@@ -26,6 +26,8 @@ Vamos preencher um item por vez. ✅ = já respondido.
 ## Drive
 - [x] ✅ Google Drive, pasta CORPO FELIZ
 - [x] ✅ Estrutura criada em CORPO FELIZ/Painel de acompanhamento (10/10/2026)
+- [x] ✅ "Enviar ao Drive" ligado (Apps Script + função painel-drive): prints aprovados vão para Materiais autorizados/Instagram/AAAA-MM (12/10/2026)
+- [ ] Primeiro envio real de um print aprovado
 - [ ] E-mails de quem usa as pastas (social media e equipe), para trocar o acesso de "qualquer pessoa com o link" para "Restrito"
 - [ ] Depois de restringir: mover as fotos da pasta "ANTES E DEPOIS" para "Importações originais"
 
