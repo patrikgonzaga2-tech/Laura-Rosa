@@ -8,6 +8,11 @@
 // Grupos do WhatsApp são ignorados: só conversas individuais do número de suporte.
 // Se chegar um formato que não sabemos ler, guardamos só a lista de campos (sem valores)
 // em painel_eventos, para ajustar a leitura.
+//
+// Respostas da equipe: a UMCLIQUE só reenvia as mensagens RECEBIDAS. Das enviadas pelo celular
+// do suporte chega só o aviso de entrega (messages_update, IsFromMe). Nesse caso buscamos o texto
+// no provedor do número (uazapi, POST {BaseUrl}/message/find) com a chave do canal que vem no
+// próprio aviso. A chave é usada só nesta requisição e nunca é gravada; só aceitamos *.uazapi.com.
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -98,6 +103,68 @@ function lerEvento(b: any): any | null {
   };
 }
 
+async function gravar(ev: any): Promise<boolean> {
+  if (ev.grupo) return false;
+  const numero = soDigitos(ev.contato);
+  if (numero.length < 8) return false;
+  const conversa = await pseudonimo(numero);
+  if (!ev.texto && !ev.tipoMidia) return false;
+
+  await db.from("painel_chats").upsert(
+    { chat_id: conversa, origem: "whatsapp", titulo: "WhatsApp de suporte", tipo: "privado", permitido: true },
+    { onConflict: "chat_id", ignoreDuplicates: true },
+  );
+  const nome = ev.deMim ? null : (String(ev.nome ?? "").trim().split(/\s+/)[0] || null);
+  const linha = {
+    origem: "whatsapp", chat_id: conversa, mensagem_id: String(ev.id),
+    data: new Date(ev.quando).toISOString(),
+    autor_ref: ev.deMim ? "wa_equipe" : conversa,
+    autor_nome: ev.deMim ? "Equipe" : (nome && !/^\+?\d[\d\s()-]*$/.test(nome) ? nome.slice(0, 40) : null),
+    autor_equipe: !!ev.deMim,
+    texto: ev.texto ? String(ev.texto).slice(0, 4000) : null,
+    responde_a: ev.responde ? String(ev.responde).split(":").pop() : null,
+    tem_midia: !!ev.tipoMidia, tipo_midia: ev.tipoMidia, midia_ref: null, editada: false,
+  };
+  const { error } = await db.from("painel_mensagens").upsert(linha, { onConflict: "origem,chat_id,mensagem_id" });
+  if (error) { await evento("wa_erro_gravar", error.message); return false; }
+  await db.from("painel_chats").update({ ultima_msg_em: linha.data }).eq("chat_id", conversa);
+  return true;
+}
+
+// Aviso de que o número de suporte enviou mensagens: busca o texto delas no provedor.
+async function buscarEnviadas(b: any): Promise<number> {
+  const e = b?.event ?? {};
+  if (e.IsFromMe !== true || e.IsGroup === true) return 0;
+  const ids: string[] = (Array.isArray(e.MessageIDs) ? e.MessageIDs : []).map((x: any) => String(x));
+  const chat = primeiro(e.chatid, e.Chat);
+  if (!ids.length || !chat || String(chat).endsWith("@g.us")) return 0;
+  const base = String(b?.BaseUrl ?? "");
+  const token = String(b?.token ?? "");
+  let host = "";
+  try { const u = new URL(base); host = u.protocol === "https:" ? u.hostname : ""; } catch { /* inválida */ }
+  if (!token || !/(^|\.)uazapi\.com$/.test(host)) { await evento("wa_busca", `Endereço do provedor não aceito para buscar respostas: ${host || "(vazio)"}${token ? "" : ", sem chave"}`); return 0; }
+  const conversa = await pseudonimo(soDigitos(chat));
+  const { data: ja } = await db.from("painel_mensagens").select("mensagem_id").eq("origem", "whatsapp").eq("chat_id", conversa).in("mensagem_id", ids);
+  const faltam = ids.filter((id) => !(ja ?? []).some((r: any) => r.mensagem_id === id));
+  if (!faltam.length) return 0;
+  const r = await fetch(base.replace(/\/+$/, "") + "/message/find", {
+    method: "POST",
+    headers: { "content-type": "application/json", token },
+    body: JSON.stringify({ chatid: chat, fromMe: true, limit: 30 }),
+  });
+  const corpo = await r.json().catch(() => null);
+  const lista: any[] = Array.isArray(corpo) ? corpo : (corpo?.messages ?? corpo?.data ?? corpo?.result ?? []);
+  let n = 0;
+  for (const m of lista) {
+    const id = String(primeiro(m?.messageid, m?.id, "")).split(":").pop();
+    if (!faltam.includes(id)) continue;
+    const ev = lerEvento({ message: { ...m, chatid: primeiro(m.chatid, chat), messageid: id, fromMe: true } });
+    if (ev && await gravar(ev)) n++;
+  }
+  if (!n) await evento("wa_busca", `Busca de ${faltam.length} mensagem(ns) enviada(s) sem resultado (HTTP ${r.status}). Campos: ` + formato(corpo).slice(0, 40).join(", "));
+  return n;
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method === "GET") return json({ ok: true, servico: "painel-whatsapp" });
@@ -111,6 +178,7 @@ Deno.serve(async (req) => {
     const lista = Array.isArray(corpo) ? corpo : [corpo];
     let gravadas = 0;
     for (const b of lista) {
+      if (/messages_update/i.test(String(b?.EventType ?? ""))) { gravadas += await buscarEnviadas(b); continue; }
       const ev = lerEvento(b);
       if (!ev) {
         const tipoEvento = String(b?.EventType ?? b?.event ?? b?.type ?? "");
@@ -119,31 +187,7 @@ Deno.serve(async (req) => {
         }
         continue;
       }
-      if (ev.grupo) continue;
-      const numero = soDigitos(ev.contato);
-      if (numero.length < 8) continue;
-      const conversa = await pseudonimo(numero);
-      if (!ev.texto && !ev.tipoMidia) continue;
-
-      await db.from("painel_chats").upsert(
-        { chat_id: conversa, origem: "whatsapp", titulo: "WhatsApp de suporte", tipo: "privado", permitido: true },
-        { onConflict: "chat_id", ignoreDuplicates: true },
-      );
-      const nome = ev.deMim ? null : (String(ev.nome ?? "").trim().split(/\s+/)[0] || null);
-      const linha = {
-        origem: "whatsapp", chat_id: conversa, mensagem_id: String(ev.id),
-        data: new Date(ev.quando).toISOString(),
-        autor_ref: ev.deMim ? "wa_equipe" : conversa,
-        autor_nome: ev.deMim ? "Equipe" : (nome && !/^\+?\d[\d\s()-]*$/.test(nome) ? nome.slice(0, 40) : null),
-        autor_equipe: !!ev.deMim,
-        texto: ev.texto ? String(ev.texto).slice(0, 4000) : null,
-        responde_a: ev.responde ? String(ev.responde).split(":").pop() : null,
-        tem_midia: !!ev.tipoMidia, tipo_midia: ev.tipoMidia, midia_ref: null, editada: false,
-      };
-      const { error } = await db.from("painel_mensagens").upsert(linha, { onConflict: "origem,chat_id,mensagem_id" });
-      if (error) { await evento("wa_erro_gravar", error.message); continue; }
-      await db.from("painel_chats").update({ ultima_msg_em: linha.data }).eq("chat_id", conversa);
-      gravadas++;
+      if (await gravar(ev)) gravadas++;
     }
     return json({ ok: true, gravadas });
   } catch (e) {
