@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       const ev = lerEvento(b);
       if (!ev) {
         const tipoEvento = String(b?.EventType ?? b?.event ?? b?.type ?? "");
-        if (!/presence|status|ack|receipt|connection|chats|contacts|history|call/i.test(tipoEvento)) {
+        if (!/presence|status|ack|receipt|update|connection|chats|contacts|history|call|label/i.test(tipoEvento)) {
           await evento("wa_formato", "Evento não lido (" + tipoEvento + "): " + formato(b).join(", "));
         }
         continue;
