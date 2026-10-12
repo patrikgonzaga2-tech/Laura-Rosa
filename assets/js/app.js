@@ -1165,7 +1165,8 @@
     var D = S.drive;
     D.verificando = true;
     P.nuvem.drive({ acao: 'status' }).then(function (r) {
-      D.configurado = !!r.configurado; D.pastaUrl = r.pastaUrl || ''; D.erro = r.configurado === false && r.erro ? r.erro : '';
+      D.configurado = !!r.configurado; D.pastaUrl = r.pastaUrl || '';
+      D.erro = r.falta && r.falta.length ? 'O servidor não encontrou ' + r.falta.join(' e ') + ' nos Secrets das Edge Functions do Supabase (projeto "Corpo Feliz – CRM e Ideias").' : (r.configurado === false && r.erro ? r.erro : '');
     }).catch(function (e) { D.configurado = false; D.erro = e.message || P.nuvem.traduzir(e); })
       .then(function () { D.verificado = true; D.verificando = false; if (S.aba === 'prints') render(); });
   }

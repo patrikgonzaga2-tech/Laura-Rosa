@@ -9,8 +9,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-const DRIVE_URL = Deno.env.get("DRIVE_URL") ?? "";
-const DRIVE_CHAVE = Deno.env.get("DRIVE_CHAVE") ?? "";
+// Lidos a cada chamada, para valer logo depois de criados nos Secrets.
+const driveUrl = () => (Deno.env.get("DRIVE_URL") ?? "").trim();
+const driveChave = () => (Deno.env.get("DRIVE_CHAVE") ?? "").trim();
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -22,7 +23,7 @@ function json(obj: unknown, status = 200) {
 }
 
 async function appsScript(corpo: Record<string, unknown>) {
-  const r = await fetch(DRIVE_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...corpo, chave: DRIVE_CHAVE }), redirect: "follow" });
+  const r = await fetch(driveUrl(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...corpo, chave: driveChave() }), redirect: "follow" });
   const texto = await r.text();
   try { return JSON.parse(texto); } catch { return { ok: false, erro: "O Drive respondeu algo inesperado (HTTP " + r.status + "). Confira a publicação do Apps Script." }; }
 }
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
     if (!["admin", "exportacao"].includes(eu.funcao)) return json({ ok: false, erro: "Só Administração e Exportação enviam ao Drive." }, 403);
 
     const corpo = await req.json().catch(() => ({}));
-    if (!DRIVE_URL || !DRIVE_CHAVE) return json({ ok: true, configurado: false });
+    if (!driveUrl() || !driveChave()) return json({ ok: true, configurado: false, falta: [!driveUrl() && "DRIVE_URL", !driveChave() && "DRIVE_CHAVE"].filter(Boolean) });
     if (corpo.acao === "status") {
       const r = await appsScript({ acao: "status" });
       return json({ ok: !!r.ok, configurado: !!r.ok, pastaUrl: r.url ?? null, erro: r.ok ? undefined : (r.erro === "chave" ? "A chave do Drive não confere. Confira DRIVE_CHAVE." : r.erro) });
