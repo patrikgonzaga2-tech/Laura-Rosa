@@ -261,6 +261,7 @@
     autorizar: function (id, status, por) { return rpc('painel_autorizar', { p_id: id, p_status: status, p_por: por || '' }); },
     registro: function () { return rpc('painel_registro', { p_limite: 200 }); },
     usuarios: usuarios,
-    drive: function (corpo) { return funcao('painel-drive', corpo); }
+    drive: function (corpo) { return funcao('painel-drive', corpo); },
+    ia: function (corpo) { return funcao('painel-ia', corpo); }
   };
 })(window.Painel);

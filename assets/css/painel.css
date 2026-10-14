@@ -554,3 +554,88 @@ body.sem-login > :not(#entrada):not(script):not(noscript) { display: none !impor
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Ideias da IA ---------- */
+.ia-bloco { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+.ia-bloco h2 { font-family: var(--f-display); font-size: 1.2rem; margin: 0; }
+.ia-bloco-cabeca { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.ia-filtro { display: flex; flex-wrap: wrap; gap: 6px; }
+.ia-selo { display: inline-block; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); }
+.ia-resumo { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px 24px; align-items: start; background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); margin-top: 14px; }
+.ia-resumo-texto p { font-size: 1.05rem; line-height: 1.5; margin: 6px 0 0; }
+.ia-humor-barra { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.ia-humor-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 0.84rem; color: var(--muted); }
+.ia-humor-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.h-positivo { background: #2fa36b; } .h-neutro { background: #b9aab2; } .h-negativo { background: #d6485b; }
+.ia-kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ia-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 10px 12px; display: flex; flex-direction: column; }
+.ia-kpi strong { font-family: var(--f-display); font-size: 1.8rem; line-height: 1.1; color: var(--accent-ink); }
+.ia-kpi span { font-size: 0.84rem; color: var(--muted); }
+.ia-kpi-alerta strong { color: var(--crit); }
+.ia-gerando { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: var(--raio); background: var(--accent-soft); margin-top: 12px; }
+.ia-gerando p { margin: 2px 0 0; }
+.ia-pulso { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: ia-pulso 1.2s ease-in-out infinite; flex: none; }
+@keyframes ia-pulso { 0%, 100% { transform: scale(0.7); opacity: 0.5; } 50% { transform: scale(1.1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ia-pulso { animation: none; } }
+.ia-alertas { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.ia-alerta { border-radius: var(--raio); padding: 12px 14px; border: 1px solid var(--line); border-left-width: 5px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
+.ia-alerta h3 { margin: 0; font-size: 1rem; }
+.ia-alerta p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.ia-alerta.u-alta { border-left-color: var(--crit); background: var(--crit-soft); }
+.ia-alerta.u-media { border-left-color: #d79a1e; background: var(--warn-soft); }
+.ia-alerta.u-baixa { border-left-color: var(--line); }
+.ia-alerta-tipo { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.ia-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.ia-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--sombra); }
+.ia-card-capa { --c1: #a3245c; --c2: #e67aa8; background: linear-gradient(140deg, var(--c1), var(--c2)); color: #fff; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 150px; position: relative; }
+.f-reels .ia-card-capa { --c1: #7a1f4b; --c2: #e0568c; }
+.f-carrossel .ia-card-capa { --c1: #5b2a86; --c2: #b06bd6; }
+.f-stories .ia-card-capa { --c1: #b34a1d; --c2: #f39a5b; }
+.f-post .ia-card-capa { --c1: #1f5c6b; --c2: #4fb3a9; }
+.ia-formato { align-self: flex-start; background: rgba(255, 255, 255, 0.2); border-radius: 999px; padding: 3px 10px; font-size: 0.8rem; font-weight: 700; }
+.ia-prio { position: absolute; top: 14px; right: 14px; font-size: 0.72rem; font-weight: 700; background: rgba(0, 0, 0, 0.22); border-radius: 999px; padding: 3px 9px; }
+.ia-prio.p-alta { background: #fff; color: #7a1f4b; }
+.ia-gancho { font-family: var(--f-display); font-size: 1.25rem; line-height: 1.25; font-weight: 700; margin: 0; text-wrap: balance; }
+.ia-card-corpo { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.ia-card-corpo h3 { margin: 0; font-size: 1.02rem; }
+.ia-evid { margin: 0; font-size: 0.86rem; color: var(--accent-ink); font-weight: 600; }
+.ia-balas { display: flex; flex-direction: column; gap: 6px; }
+.ia-bala { margin: 0; background: var(--surface-2); border-radius: 12px 12px 12px 3px; padding: 7px 11px; font-size: 0.9rem; align-self: flex-start; max-width: 95%; }
+.ia-resp { margin: 0; font-size: 0.88rem; border-left: 3px solid var(--accent); padding-left: 10px; color: var(--muted); }
+.ia-detalhe { border-top: 1px solid var(--line); padding-top: 10px; }
+.ia-detalhe h4 { margin: 6px 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.ia-detalhe ol { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; }
+.ia-legenda { white-space: normal; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin: 0; font-size: 0.92rem; }
+.ia-acoes { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ia-duas { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.ia-duvidas { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.ia-duvidas li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ia-duvidas p { margin: 0; }
+.ia-duvida-topo { display: flex; justify-content: space-between; gap: 10px; }
+.ia-vezes { font-family: var(--f-display); font-weight: 700; color: var(--accent-ink); }
+.ia-barra { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.ia-barra span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.chip-alerta { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; font-weight: 600; }
+.ia-provas { display: flex; flex-direction: column; gap: 10px; }
+.ia-prova { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 12px 14px; }
+.ia-prova-icone { font-size: 1.6rem; line-height: 1; }
+.ia-prova p { margin: 4px 0 0; }
+.ia-frase { font-family: var(--f-display); font-size: 1.05rem; }
+.ia-antiga { margin-top: 26px; }
+.ia-antiga summary { cursor: pointer; font-weight: 600; }
+.ia-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 65vh; overflow: auto; }
+.ia-msgs li { border: 1px solid var(--line); border-radius: var(--raio); padding: 10px 12px; }
+.ia-msgs p { margin: 6px 0 0; }
+.ia-destaque { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.ia-mini { border-radius: var(--raio); padding: 12px 14px; color: #fff; background: linear-gradient(140deg, #7a1f4b, #e0568c); display: flex; flex-direction: column; gap: 6px; cursor: pointer; border: 0; text-align: left; font: inherit; }
+.ia-mini small { opacity: 0.85; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.ia-mini strong { font-family: var(--f-display); font-size: 1.05rem; line-height: 1.25; }
+.ia-mini.f-carrossel { background: linear-gradient(140deg, #5b2a86, #b06bd6); }
+.ia-mini.f-stories { background: linear-gradient(140deg, #b34a1d, #f39a5b); }
+.ia-mini.f-post { background: linear-gradient(140deg, #1f5c6b, #4fb3a9); }
+.ia-mini.ia-mini-alerta { background: var(--crit-soft); color: var(--fg); border: 1px solid var(--crit); }
+@media (max-width: 820px) {
+  .ia-resumo, .ia-duas { grid-template-columns: 1fr; }
+  .ia-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.ia-topo { margin: 14px 0 4px; display: flex; flex-direction: column; gap: 10px; }

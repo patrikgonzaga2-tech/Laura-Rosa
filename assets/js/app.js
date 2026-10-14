@@ -63,6 +63,7 @@
     nuvem: { carregando: false, erro: '', buscadoEm: 0, grupos: [] },
     usu: { lista: null, carregando: false, erro: '', link: null, acesso: null, editando: '', ocupado: false },
     registroServidor: null,
+    ia: { carregando: false, gerando: false, configurado: null, analise: null, erro: '', buscadoEm: 0, aberta: null, formato: '', espera: 0 },
     drive: { verificado: false, verificando: false, configurado: false, pastaUrl: '', erro: '', enviando: '' },
     filtros: { periodo: '30', inicio: '', fim: '', canal: '', tema: '', tipo: '', autorizacao: '' },
     busca: '',
@@ -411,7 +412,7 @@
     bm.querySelector('.menu-atual').textContent = atual ? atual.nome : 'Menu';
   }
 
-  function filtrosVisiveis() { return ['visao', 'dia', 'dores', 'resultados', 'ideias', 'ajuda', 'mensagens', 'relatorios'].indexOf(S.aba) !== -1; }
+  function filtrosVisiveis() { return ['visao', 'dia', 'dores', 'resultados', 'ajuda', 'mensagens', 'relatorios'].indexOf(S.aba) !== -1; }
 
   var PERIODOS = [['7', '7 dias'], ['14', '14 dias'], ['30', '30 dias'], ['60', '60 dias'], ['tudo', 'Tudo'], ['custom', 'Escolher datas']];
 
@@ -572,6 +573,7 @@
       }
     };
 
+    h += destaqueIA();
     var visiveis = S.prefs.secoes.filter(function (s) { return s.visivel; });
     if (!visiveis.length) return h + vazio('Todas as seções estão ocultas', 'Use "Personalizar painel" para mostrar as seções que quiser.', '<button type="button" class="btn" data-acao="personalizar">Personalizar painel</button>');
     h += '<div class="secoes-visao">' + visiveis.map(function (s) {
@@ -843,9 +845,131 @@
   /* ---------- Ideias de conteúdo ---------- */
 
   function abaIdeias() {
+    var I = S.ia;
+    if (!I.buscadoEm && !I.carregando) carregarIA(false);
+    var an = I.analise, r = an && an.resultado;
+    var podeGerar = pode('editar') && I.configurado;
+    var h = '<div class="cabeca-aba cabeca-linha"><div><h1>Ideias de conteúdo</h1><p class="sub">' +
+      (an ? 'A IA leu ' + U.fmtNum(an.mensagens) + ' mensagens de ' + U.fmtData(Date.parse(an.inicio)) + ' a ' + U.fmtData(Date.parse(an.fim)) + ' · atualizado ' + U.fmtRel(Date.parse(an.criado_em), Date.now()) + '.' :
+        'A IA lê as conversas do Telegram e do WhatsApp e transforma em posts prontos.') + '</p></div>' +
+      '<div class="ferramentas">' + (podeGerar ? '<button type="button" class="btn btn-peq" data-acao="ia-gerar"' + (I.gerando ? ' disabled' : '') + '>' + (I.gerando ? 'Gerando…' : 'Gerar de novo') + '</button>' : '') + '</div></div>';
+
+    if (I.gerando) h += '<div class="ia-gerando" role="status"><span class="ia-pulso" aria-hidden="true"></span><div><strong>A IA está lendo as conversas.</strong><p class="sub">Leva de 1 a 3 minutos. Pode continuar usando o painel.</p></div></div>';
+    if (I.erro) h += '<p class="nota nota-trava">' + esc(I.erro) + '</p>';
+    if (I.configurado === false && !an) {
+      return h + vazio('Falta ligar a IA', 'Para gerar as ideias, a chave da IA (ANTHROPIC_API_KEY) precisa estar nos Secrets das Edge Functions do Supabase, no projeto "Corpo Feliz – CRM e Ideias".');
+    }
+    if (!an) return h + (I.carregando || I.gerando ? vazio('Buscando as ideias…', 'Um instante.') : vazio('Nenhuma análise ainda', 'Clique em "Gerar de novo" para a IA ler as conversas.'));
+
+    var hum = r.humor || {}, tot = (hum.positivo || 0) + (hum.neutro || 0) + (hum.negativo || 0) || 1;
+    h += '<section class="painel-card ia-resumo"><div class="ia-resumo-texto"><span class="ia-selo">Resumo da semana</span><p>' + esc(r.resumo) + '</p></div>' +
+      '<div class="ia-humor" aria-label="Tom das alunas"><div class="ia-humor-barra">' +
+      ['positivo', 'neutro', 'negativo'].map(function (k) { return '<span class="h-' + k + '" style="width:' + Math.round(100 * (hum[k] || 0) / tot) + '%"></span>'; }).join('') +
+      '</div><div class="ia-humor-leg"><span><i class="h-positivo"></i>Positivo ' + (hum.positivo || 0) + '%</span><span><i class="h-neutro"></i>Neutro ' + (hum.neutro || 0) + '%</span><span><i class="h-negativo"></i>Negativo ' + (hum.negativo || 0) + '%</span></div></div>' +
+      '<div class="ia-kpis">' + kpiIA(r.ideias.length, 'ideias de post') + kpiIA(r.duvidas.length, 'dúvidas que se repetem') + kpiIA(r.provas.length, 'possíveis depoimentos') + kpiIA(r.alertas.length, 'alertas', r.alertas.some(function (x) { return x.urgencia === 'alta'; })) + '</div></section>';
+
+    if (r.alertas.length) {
+      h += '<section class="ia-bloco"><h2>Pede ação da equipe</h2><div class="ia-alertas">' + r.alertas.map(function (x, i) {
+        return '<article class="ia-alerta u-' + x.urgencia + '"><span class="ia-alerta-tipo">' + esc(TIPO_ALERTA[x.tipo] || x.tipo) + (x.quantidade > 1 ? ' · ' + x.quantidade : '') + '</span>' +
+          '<h3>' + esc(x.titulo) + '</h3><p>' + esc(x.detalhe) + '</p>' + botaoMsgs('alertas', i, x.mensagens) + '</article>';
+      }).join('') + '</div></section>';
+    }
+
+    var formatos = ['Reels', 'Carrossel', 'Stories', 'Post'].filter(function (f) { return r.ideias.some(function (x) { return x.formato === f; }); });
+    var lista = r.ideias.map(function (x, i) { return { x: x, i: i }; }).filter(function (o) { return !I.formato || o.x.formato === I.formato; });
+    h += '<section class="ia-bloco"><div class="ia-bloco-cabeca"><h2>Posts sugeridos</h2><div class="ia-filtro" role="group" aria-label="Formato">' +
+      [['', 'Todos']].concat(formatos.map(function (f) { return [f, f]; })).map(function (f) {
+        return '<button type="button" class="chip-periodo" data-acao="ia-formato" data-v="' + f[0] + '" aria-pressed="' + (I.formato === f[0]) + '">' + esc(f[1]) + '</button>';
+      }).join('') + '</div></div><div class="ia-grade">' + lista.map(function (o) { return cardIdeia(o.x, o.i); }).join('') + '</div></section>';
+
+    h += '<div class="ia-duas"><section class="ia-bloco"><h2>Dúvidas que mais se repetem</h2>' + (r.duvidas.length ? '<ol class="ia-duvidas">' + r.duvidas.map(function (d, i) {
+      var max = Math.max.apply(null, r.duvidas.map(function (z) { return z.vezes || 1; }));
+      return '<li><div class="ia-duvida-topo"><strong>' + esc(d.pergunta) + '</strong><span class="ia-vezes">' + d.vezes + 'x</span></div>' +
+        '<div class="ia-barra"><span style="width:' + Math.round(100 * (d.vezes || 1) / max) + '%"></span></div>' +
+        '<p class="sub">' + (d.ja_respondida ? '<span class="chip chip-ok">Equipe já respondeu</span> ' : '<span class="chip chip-alerta">Sem resposta</span> ') + esc(d.resposta_sugerida) + '</p>' + botaoMsgs('duvidas', i, d.mensagens) + '</li>';
+    }).join('') + '</ol>' : '<p class="sub">Nenhuma dúvida repetida no período.</p>') + '</section>' +
+      '<section class="ia-bloco"><h2>Possíveis depoimentos</h2><p class="sub">Só viram post com autorização da aluna. Abra a mensagem e registre a autorização.</p>' + (r.provas.length ? '<div class="ia-provas">' + r.provas.map(function (p, i) {
+        return '<article class="ia-prova"><span class="ia-prova-icone" aria-hidden="true">' + (ICONE_PROVA[p.tipo] || '✨') + '</span><div><span class="chip">' + esc(TIPO_PROVA[p.tipo] || p.tipo) + '</span>' +
+          '<p class="ia-frase">“' + esc(p.frase) + '”</p><p class="sub">' + esc(p.resumo) + '</p>' + botaoMsgs('provas', i, p.mensagens, 'Abrir e autorizar') + '</div></article>';
+      }).join('') + '</div>' : '<p class="sub">Nenhum relato de resultado no período.</p>') + '</section></div>';
+
     var a = analisePeriodo();
-    return '<div class="cabeca-aba"><h1>Ideias de conteúdo</h1><p class="sub">Pauta montada a partir do que as alunas trouxeram de ' + U.fmtDataAno(a.iv[0]) + ' a ' + U.fmtDataAno(a.iv[1]) + '. Para exportar e compartilhar, use <button type="button" class="link" data-acao="ir-pauta">Relatórios</button>.</p></div>' +
-      '<section class="painel-card relatorio">' + a.r.html + '</section>';
+    h += '<details class="painel-card ia-antiga"><summary>Pauta automática por palavras-chave (versão antiga)</summary><div class="relatorio">' + a.r.html + '</div></details>';
+    return h;
+  }
+
+  var TIPO_ALERTA = { cancelamento: 'Cancelamento', cobranca: 'Cobrança e renovação', acesso: 'Acesso ao app', saude: 'Saúde', insatisfacao: 'Insatisfação', sem_resposta: 'Sem resposta', outro: 'Outro' };
+  var TIPO_PROVA = { peso: 'Peso', medidas: 'Medidas', autoestima: 'Autoestima', saude: 'Saúde', rotina: 'Rotina', comunidade: 'Comunidade' };
+  var ICONE_PROVA = { peso: '⚖️', medidas: '📏', autoestima: '💖', saude: '🩺', rotina: '🗓️', comunidade: '🤝' };
+  var ICONE_FORMATO = { Reels: '🎬', Carrossel: '🖼️', Stories: '📱', Post: '📝' };
+
+  // Faixa no topo da Visão geral: alertas urgentes e as 3 ideias mais fortes da IA.
+  function destaqueIA() {
+    if (!S.ia.buscadoEm && !S.ia.carregando) carregarIA(false);
+    var r = S.ia.analise && S.ia.analise.resultado;
+    if (!r) return '';
+    var urg = r.alertas.filter(function (x) { return x.urgencia === 'alta'; });
+    var cards = urg.slice(0, 2).map(function (x) {
+      return '<button type="button" class="ia-mini ia-mini-alerta" data-acao="ir-ideias"><small>' + esc(TIPO_ALERTA[x.tipo] || 'Alerta') + '</small><strong>' + esc(x.titulo) + '</strong></button>';
+    }).concat(r.ideias.slice(0, 4 - Math.min(urg.length, 2)).map(function (x) {
+      return '<button type="button" class="ia-mini f-' + x.formato.toLowerCase() + '" data-acao="ir-ideias"><small>' + esc(x.formato) + ' · ' + esc(x.evidencia) + '</small><strong>' + esc(x.gancho) + '</strong></button>';
+    }));
+    return '<section class="painel-card secao-cheia ia-topo" aria-labelledby="sec-ia"><div class="card-topo"><h2 id="sec-ia">Destaques da semana (IA)</h2><button type="button" class="link" data-acao="ir-ideias">Ver todas as ideias</button></div>' +
+      '<p class="sub">' + esc(r.resumo) + '</p><div class="ia-destaque">' + cards.join('') + '</div></section>';
+  }
+
+  function kpiIA(n, rot, alerta) { return '<div class="ia-kpi' + (alerta ? ' ia-kpi-alerta' : '') + '"><strong>' + n + '</strong><span>' + esc(rot) + '</span></div>'; }
+  function botaoMsgs(k, i, ids, rot) {
+    if (!ids || !ids.length) return '';
+    return '<button type="button" class="link" data-acao="ia-msgs" data-k="' + k + '" data-i="' + i + '">' + esc(rot || 'Ver as mensagens') + ' (' + ids.length + ')</button>';
+  }
+  function cardIdeia(x, i) {
+    var aberta = S.ia.aberta === i;
+    return '<article class="ia-card f-' + x.formato.toLowerCase() + '">' +
+      '<div class="ia-card-capa"><span class="ia-formato"><span aria-hidden="true">' + (ICONE_FORMATO[x.formato] || '') + '</span> ' + esc(x.formato) + '</span>' +
+      '<span class="ia-prio p-' + x.prioridade + '">' + (x.prioridade === 'alta' ? 'Prioridade alta' : x.prioridade === 'media' ? 'Prioridade média' : 'Prioridade baixa') + '</span>' +
+      '<p class="ia-gancho">' + esc(x.gancho) + '</p></div>' +
+      '<div class="ia-card-corpo"><h3>' + esc(x.titulo) + '</h3><p class="ia-evid"><span aria-hidden="true">💬</span> ' + esc(x.evidencia) + '</p>' +
+      (x.frases.length ? '<div class="ia-balas">' + x.frases.slice(0, 3).map(function (f) { return '<p class="ia-bala">' + esc(f) + '</p>'; }).join('') + '</div>' : '') +
+      (x.resposta_equipe ? '<p class="ia-resp"><strong>O que a equipe já respondeu:</strong> ' + esc(x.resposta_equipe) + '</p>' : '') +
+      (x.usa_depoimento ? '<p class="chip chip-alerta">Usa depoimento: precisa de autorização</p>' : '') +
+      (aberta ? '<div class="ia-detalhe"><h4>Roteiro</h4><ol>' + x.roteiro.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ol>' +
+        '<h4>Legenda</h4><p class="ia-legenda">' + esc(x.legenda).replace(/\n/g, '<br>') + '</p></div>' : '') +
+      '<div class="ia-acoes"><button type="button" class="btn btn-sec btn-peq" data-acao="ia-abrir" data-i="' + i + '" aria-expanded="' + aberta + '">' + (aberta ? 'Fechar' : 'Ver roteiro e legenda') + '</button>' +
+      '<button type="button" class="btn btn-sec btn-peq" data-acao="ia-copiar" data-i="' + i + '">Copiar legenda</button>' + botaoMsgs('ideias', i, x.mensagens) + '</div></div></article>';
+  }
+
+  function carregarIA(gerar) {
+    var I = S.ia;
+    if (I.carregando) return;
+    I.carregando = true; I.erro = '';
+    if (gerar) { I.gerando = true; render(); }
+    P.nuvem.ia({ acao: gerar ? 'gerar' : 'ler' }).then(function (r) {
+      I.configurado = r.configurado; I.gerando = !!r.gerando;
+      if (r.analise) I.analise = r.analise;
+      I.buscadoEm = Date.now();
+      if (gerar && !r.gerando) avisar('Ideias atualizadas.');
+    }).catch(function (e) { I.erro = e.message || P.nuvem.traduzir(e); I.gerando = false; })
+      .then(function () {
+        I.carregando = false;
+        clearTimeout(I.espera);
+        if (I.gerando) I.espera = setTimeout(function () { if (S.aba === 'ideias' || S.aba === 'visao') carregarIA(false); }, 30000);
+        if (S.aba === 'ideias' || S.aba === 'visao') render();
+      });
+  }
+
+  function itemIA(b) { var r = S.ia.analise && S.ia.analise.resultado; return r && r[b.dataset.k] && r[b.dataset.k][+b.dataset.i]; }
+  function abrirMsgsIA(b) {
+    var it = itemIA(b);
+    if (!it) return;
+    var msgs = (it.mensagens || []).map(function (id) { return conj().mensagens.find(function (m) { return m.dbId === id; }); }).filter(Boolean);
+    S.modalAtivo = 'ia-msgs';
+    abrirModal('<div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="iam-tit"><div class="modal-cabeca"><h2 id="iam-tit">' + esc(it.titulo || it.pergunta || it.resumo || 'Mensagens') + '</h2>' +
+      '<button type="button" class="btn btn-sec btn-peq" data-acao="fechar-modal">Fechar</button></div>' +
+      (msgs.length ? '<ul class="ia-msgs">' + msgs.map(function (m) {
+        return '<li>' + canalTag(m.canal) + ' <span class="sub">' + U.fmtDataHora(m.data) + ' · ' + esc(m.equipe ? 'Equipe' : rotuloAluna(m.alunaId)) + '</span><p>' + esc(textoSeguro(m)) + '</p>' +
+          (b.dataset.k === 'provas' && !m.equipe ? formAut('msg', m) : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="sub">Essas mensagens têm mais de 60 dias ou ainda não foram carregadas. Use "Atualizar dados".</p>') + '</div>');
   }
 
   /* ---------- Como ajudar mais ---------- */
@@ -1875,6 +1999,15 @@
     'filtrar-tema': function (b) { S.filtros.tema = b.dataset.v; render(); avisar('Filtro aplicado: ' + nomeTema(b.dataset.v)); },
     'ir-revisao': function () { S.aba = 'mensagens'; S.soNaoRevisadas = true; render(); },
     'ir-pauta': function () { S.aba = 'relatorios'; S.rel.tipo = 'pauta'; render(); window.scrollTo(0, 0); },
+    'ia-gerar': function () { carregarIA(true); },
+    'ia-formato': function (b) { S.ia.formato = b.dataset.v; S.ia.aberta = null; render(); },
+    'ia-abrir': function (b) { var i = +b.dataset.i; S.ia.aberta = S.ia.aberta === i ? null : i; render(); },
+    'ia-copiar': function (b) {
+      var x = S.ia.analise.resultado.ideias[+b.dataset.i];
+      U.copiar(x.legenda, function () { avisar('Legenda copiada.'); }, function () { avisar('Não consegui copiar. Abra "Ver roteiro e legenda" e copie à mão.'); });
+    },
+    'ia-msgs': function (b) { abrirMsgsIA(b); },
+    'ir-ideias': function () { S.aba = 'ideias'; render(); window.scrollTo(0, 0); },
     gran: function (b) { S.gran = b.dataset.v; render(); },
     mais: function () { S.limite += 40; if (S.aba === 'mensagens') renderListaMensagens(); else render(); },
     sub: function (b) { S[b.dataset.k] = b.dataset.v; S.limite = 40; render(); },
