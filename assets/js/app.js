@@ -857,7 +857,7 @@
     if (I.gerando) h += '<div class="ia-gerando" role="status"><span class="ia-pulso" aria-hidden="true"></span><div><strong>A IA está lendo as conversas.</strong><p class="sub">Leva de 1 a 3 minutos. Pode continuar usando o painel.</p></div></div>';
     if (I.erro) h += '<p class="nota nota-trava">' + esc(I.erro) + '</p>';
     if (I.configurado === false && !an) {
-      return h + vazio('Falta ligar a IA', 'Para gerar as ideias, a chave da IA (ANTHROPIC_API_KEY) precisa estar nos Secrets das Edge Functions do Supabase, no projeto "Corpo Feliz – CRM e Ideias".');
+      return h + vazio('Falta ligar a IA', 'Para gerar as ideias, a chave da IA (GEMINI_API_KEY, do Google) precisa estar nos Secrets das Edge Functions do Supabase, no projeto "Corpo Feliz – CRM e Ideias".');
     }
     if (!an) return h + (I.carregando || I.gerando ? vazio('Buscando as ideias…', 'Um instante.') : vazio('Nenhuma análise ainda', 'Clique em "Gerar de novo" para a IA ler as conversas.'));
 

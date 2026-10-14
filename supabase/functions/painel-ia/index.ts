@@ -1,20 +1,24 @@
-// Painel de acompanhamento: a IA (Claude) lê as mensagens dos últimos dias e devolve
+// Painel de acompanhamento: a IA (Gemini ou Claude) lê as mensagens dos últimos dias e devolve
 // ideias de post, dúvidas que se repetem, provas sociais e alertas.
 // Ações (sempre com o login de quem usa o painel):
 //   { acao: "ler" }   → última análise. Se tiver mais de 20 h, gera uma nova em segundo plano.
 //   { acao: "gerar" } → gera agora (Administração e Edição).
 // Minimização: a IA recebe só o texto. Cada aluna vira um código ("aluna 7"); nome, telefone,
 // e-mail e links saem antes do envio. A análise é guardada em painel_ia, sem dados pessoais.
-// Segredo (Edge Functions > Secrets): ANTHROPIC_API_KEY.
+// Segredo (Edge Functions > Secrets): GEMINI_API_KEY (Google, versão grátis) ou ANTHROPIC_API_KEY (Claude, pago).
+// Se as duas existirem, usa o Gemini. GEMINI_MODELO troca o modelo do Gemini sem mexer no código.
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-const chaveIA = () => (Deno.env.get("ANTHROPIC_API_KEY") ?? "").trim();
+const chaveGemini = () => (Deno.env.get("GEMINI_API_KEY") ?? "").trim();
+const chaveClaude = () => (Deno.env.get("ANTHROPIC_API_KEY") ?? "").trim();
+const chaveIA = () => chaveGemini() || chaveClaude();
 
-const MODELO = "claude-opus-5-5";
+const MODELO_CLAUDE = "claude-opus-5-5";
+const modeloGemini = () => (Deno.env.get("GEMINI_MODELO") ?? "").trim() || "gemini-3.8-flash";
 const DIAS = 7;
 const MAX_MSGS = 2500;
 const VALIDADE_H = 20;
@@ -126,6 +130,59 @@ function limpar(t: string, nomes: string[]) {
   return s.length > 500 ? s.slice(0, 500) + "…" : s;
 }
 
+// Gemini (Google): pede JSON no formato do ESQUEMA. O Gemini usa tipos em maiúsculas e não aceita additionalProperties.
+function paraGemini(e: any): any {
+  if (Array.isArray(e)) return e.map(paraGemini);
+  if (!e || typeof e !== "object") return e;
+  const r: any = {};
+  for (const [k, v] of Object.entries(e)) {
+    if (k === "additionalProperties") continue;
+    if (k === "type") r.type = String(v).toUpperCase();
+    else if (k === "properties") r.properties = Object.fromEntries(Object.entries(v as any).map(([pk, pv]) => [pk, paraGemini(pv)]));
+    else r[k] = paraGemini(v);
+  }
+  if (r.properties && r.required) r.propertyOrdering = r.required;
+  return r;
+}
+async function perguntarGemini(pedido: string) {
+  const modelo = modeloGemini();
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": chaveGemini() },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SISTEMA }] },
+      contents: [{ role: "user", parts: [{ text: pedido }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: paraGemini(ESQUEMA), maxOutputTokens: 32000 },
+    }),
+  });
+  const j: any = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(`Gemini respondeu ${resp.status}: ${j?.error?.message ?? "erro desconhecido"}`);
+  const cand = j.candidates?.[0];
+  if (!cand) throw new Error(`O Gemini não devolveu resposta (${j.promptFeedback?.blockReason ?? "sem motivo"}).`);
+  if (cand.finishReason === "MAX_TOKENS") throw new Error("A resposta da IA ficou longa demais. Tente de novo.");
+  const texto = (cand.content?.parts ?? []).filter((p: any) => typeof p.text === "string" && !p.thought).map((p: any) => p.text).join("");
+  return { resultado: JSON.parse(texto), modelo: j.modelVersion ?? modelo, entrada: j.usageMetadata?.promptTokenCount ?? null, saida: j.usageMetadata?.candidatesTokenCount ?? null };
+}
+
+// Claude (Anthropic), usado só quando não há chave do Gemini.
+async function perguntarClaude(pedido: string) {
+  const ia = new Anthropic({ apiKey: chaveClaude() });
+  const stream = ia.beta.messages.stream({
+    model: MODELO_CLAUDE,
+    max_tokens: 32000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "medium", format: { type: "json_schema", schema: ESQUEMA } },
+    system: SISTEMA,
+    messages: [{ role: "user", content: pedido }],
+  } as any);
+  const resp: any = await stream.finalMessage();
+  if (resp.stop_reason === "refusal") throw new Error("A IA recusou esta análise. Tente de novo mais tarde.");
+  if (resp.stop_reason === "max_tokens") throw new Error("A resposta da IA ficou longa demais. Tente de novo.");
+  const texto = (resp.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  return { resultado: JSON.parse(texto), modelo: resp.model ?? MODELO_CLAUDE, entrada: resp.usage?.input_tokens ?? null, saida: resp.usage?.output_tokens ?? null };
+}
+
 async function gerar(pedidoPor: string) {
   const fim = new Date();
   const inicio = new Date(fim.getTime() - DIAS * 86400_000);
@@ -159,29 +216,17 @@ async function gerar(pedidoPor: string) {
     linhas.push(`#${n} [${quando(m.data)}] ${m.origem} · ${autor}: ${texto}${resp ? ` ↪ #${resp}` : ""}`);
   }
 
-  const ia = new Anthropic({ apiKey: chaveIA() });
-  const stream = ia.beta.messages.stream({
-    model: MODELO,
-    max_tokens: 32000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "medium", format: { type: "json_schema", schema: ESQUEMA } },
-    system: SISTEMA,
-    messages: [{ role: "user", content: `Mensagens de ${quando(inicio.toISOString())} a ${quando(fim.toISOString())} (${linhas.length} mensagens, ${codigo.size} alunas):\n\n${linhas.join("\n")}` }],
-  } as any);
-  const resp: any = await stream.finalMessage();
-  if (resp.stop_reason === "refusal") throw new Error("A IA recusou esta análise. Tente de novo mais tarde.");
-  if (resp.stop_reason === "max_tokens") throw new Error("A resposta da IA ficou longa demais. Tente de novo.");
-  const texto = (resp.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
-  const resultado = JSON.parse(texto);
+  const pedido = `Mensagens de ${quando(inicio.toISOString())} a ${quando(fim.toISOString())} (${linhas.length} mensagens, ${codigo.size} alunas):\n\n${linhas.join("\n")}`;
+  const r = chaveGemini() ? await perguntarGemini(pedido) : await perguntarClaude(pedido);
+  const resultado = r.resultado;
 
   // Troca os números das linhas pelos ids do banco, para o painel abrir a mensagem certa.
   const paraIds = (xs: number[]) => (xs ?? []).map((x) => ids[x - 1]).filter(Boolean);
   for (const k of ["ideias", "duvidas", "provas", "alertas"]) for (const it of resultado[k] ?? []) it.mensagens = paraIds(it.mensagens);
 
   const { data: salvo, error: e2 } = await db.from("painel_ia").insert({
-    inicio: inicio.toISOString(), fim: fim.toISOString(), mensagens: linhas.length, modelo: resp.model ?? MODELO, resultado,
-    tokens_entrada: resp.usage?.input_tokens ?? null, tokens_saida: resp.usage?.output_tokens ?? null, pedido_por: pedidoPor,
+    inicio: inicio.toISOString(), fim: fim.toISOString(), mensagens: linhas.length, modelo: r.modelo, resultado,
+    tokens_entrada: r.entrada, tokens_saida: r.saida, pedido_por: pedidoPor,
   }).select("id, criado_em, inicio, fim, mensagens, resultado").single();
   if (e2) throw e2;
   await db.from("painel_eventos").insert({ tipo: "ia_analise", detalhe: `${linhas.length} mensagens, ${resultado.ideias?.length ?? 0} ideias (${pedidoPor})` });
@@ -222,7 +267,7 @@ Deno.serve(async (req) => {
 
     if (corpo.acao === "gerar") {
       if (!["admin", "edicao"].includes(eu.funcao)) return json({ ok: false, erro: "Só Administração e Edição pedem uma nova análise." }, 403);
-      if (!configurado) return json({ ok: false, erro: "Falta a chave da IA (ANTHROPIC_API_KEY) nos Secrets das Edge Functions." }, 400);
+      if (!configurado) return json({ ok: false, erro: "Falta a chave da IA (GEMINI_API_KEY) nos Secrets das Edge Functions." }, 400);
       if (await gerandoAgora()) return json({ ok: true, configurado, gerando: true, analise: atual });
       const nova = await gerarRegistrando(eu.email);
       return json({ ok: true, configurado, gerando: false, analise: nova });
